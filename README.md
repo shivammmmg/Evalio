@@ -1,29 +1,88 @@
 # Evalio
 
-EECS 2311 – Group 11  
+EECS 2311 - Group 11  
 Winter 2026
 
-Evalio is a student-focused application that helps users understand course grading structures and evaluate whether their target grades are achievable. Upload your course syllabus, and we'll extract the grading rules, calculate required scores, and simulate different scenarios.
+Evalio helps students model course assessments, track current standing, test target-grade feasibility, and run what-if grade scenarios.
 
-## 🚀 Getting Started
+## What Is Implemented Right Now
+
+- Manual course setup with weighted assessments (must total 100%)
+- Grade entry with validation (`raw_score <= total_score`, non-negative values)
+- Current standing calculation from graded assessments only
+- Target feasibility analysis with YorkU letter/point mapping
+- Minimum required score for a specific remaining assessment
+- What-if scenario analysis for ungraded assessments
+- Planning dashboard and scenario explorer UI
+
+## Current Architecture
+
+- `frontend/`: Next.js App Router app (TypeScript + Tailwind)
+- `backend/`: FastAPI app with in-memory storage (`courses_db`)
+- `backend/test/`: pytest suite for grading logic and endpoint behavior
+
+Important behavior today:
+
+- Data is not persisted. Restarting the backend clears all courses.
+- The frontend works with the most recently created course (`courses[courses.length - 1]`).
+- Upload UI exists, but automatic syllabus parsing is not wired yet.
+
+## Repository Layout
+
+```text
+project-group-11-evalio/
+├── README.md
+├── log.md
+├── docs/architecture/itr1-architecture.png
+├── backend/
+│   ├── app/
+│   │   ├── main.py                # FastAPI app + CORS + /health
+│   │   ├── models.py              # Pydantic course/assessment schemas
+│   │   └── routes/courses.py      # Core grading and analysis endpoints
+│   ├── test/                      # pytest coverage for ITR1 logic
+│   ├── requirements.txt
+│   └── README.md
+└── frontend/
+    ├── src/app/setup/             # 5-step workflow routes
+    ├── src/components/setup/       # Setup, goals, dashboard, scenario UI
+    ├── src/lib/api.ts              # API client + shared types
+    ├── package.json
+    └── README.md
+```
+
+## Quick Start
 
 ### Prerequisites
 
-- **Node.js** 18+ (for frontend)
-- **Python** 3.13+ (for backend)
-- **npm** or **yarn** (for frontend dependency management)
-- **Git** (for cloning the repository)
+- Node.js 18+ (20+ recommended)
+- npm
+- Python 3.10+
 
-### Installation & Setup
-
-#### 1. Clone the Repository
+### 1. Clone
 
 ```bash
 git clone <repository-url>
 cd project-group-11-evalio
 ```
 
-#### 2. Frontend Setup (Next.js + React)
+### 2. Run Backend (FastAPI)
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate            # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+Backend URLs:
+
+- API root: `http://127.0.0.1:8000`
+- Swagger docs: `http://127.0.0.1:8000/docs`
+
+### 3. Run Frontend (Next.js)
+
+In a second terminal:
 
 ```bash
 cd frontend
@@ -31,145 +90,106 @@ npm install
 npm run dev
 ```
 
-The frontend will start on **http://localhost:3000**
+Frontend URL:
 
-#### 3. Backend Setup (FastAPI)
+- App: `http://localhost:3000`
 
-In a new terminal:
+### 4. Optional Frontend Env Variable
+
+The frontend defaults to `http://127.0.0.1:8000`.  
+To override, create `frontend/.env.local`:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+```
+
+## API Endpoints
+
+Base URL: `http://127.0.0.1:8000`
+
+- `GET /health`
+- `GET /courses/`
+- `POST /courses/`
+- `PUT /courses/{course_index}/weights`
+- `PUT /courses/{course_index}/grades`
+- `POST /courses/{course_index}/target`
+- `POST /courses/{course_index}/minimum-required`
+- `POST /courses/{course_index}/whatif`
+
+Example create-course payload:
+
+```json
+{
+  "name": "EECS2311",
+  "term": "W26",
+  "assessments": [
+    { "name": "A1", "weight": 20, "raw_score": null, "total_score": null },
+    { "name": "Midterm", "weight": 30, "raw_score": null, "total_score": null },
+    { "name": "Final", "weight": 50, "raw_score": null, "total_score": null }
+  ]
+}
+```
+
+## Frontend Workflow
+
+The setup flow under `/setup/*` is:
+
+1. Upload (`/setup/upload`)
+2. Structure (`/setup/structure`)
+3. Grades (`/setup/grades`)
+4. Goals (`/setup/goals`)
+5. Dashboard (`/setup/dashboard`)
+
+Scenario exploration is at `/setup/explore`.
+
+## Scripts
+
+Frontend:
+
+```bash
+cd frontend
+npm run dev
+npm run build
+npm run start
+npm run lint
+```
+
+Backend:
 
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8000
 ```
 
-The backend API will start on **http://localhost:8000**  
-API docs available at **http://localhost:8000/docs**
+## Testing and Validation
 
-## 📋 Current Implementation
+Frontend lint:
 
-### ✅ Completed Features
-
-**Frontend:**
-- Landing page with 3-step process overview
-- Dashboard with tab-based navigation
-- **Course Extraction** (User Story 1) – Upload and preview extracted assessments
-- **Feasibility Analysis** (User Stories 3 & 6) – Calculate required scores and risk ranges
-- **What-If Simulator** (User Story 5) – Interactive slider to test grade scenarios
-- Dark theme with glass morphism design (blue/cyan palette)
-- Responsive layout (mobile, tablet, desktop)
-
-**Backend:**
-- FastAPI server with CORS enabled
-- Health check endpoint (`/health`)
-- Course routes stub (`GET/POST /courses`)
-
-### 🔄 In Progress
-
-- API endpoint integration (connecting UI to backend data)
-- Database models (SQLAlchemy + PostgreSQL)
-- User Story 2 (Rule Modeling editor)
-- User Story 4 (Minimum Requirements calculator as standalone view)
-
-### ⏳ Planned Features
-
-- GPA converter (multiple scales)
-- Google Calendar integration for deadline export
-- OCR document parsing for automatic deadline extraction
-- Learning technique recommendations
-- Authentication (Auth0 integration)
-- Multi-course management
-- Data persistence
-
-## 📁 Project Structure
-
-```
-project-group-11-evalio/
-├── frontend/                          # Next.js 15 + React 18 + TypeScript
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx              # Landing page
-│   │   │   ├── dashboard/
-│   │   │   │   └── page.tsx          # Dashboard main page
-│   │   │   ├── layout.tsx            # Root layout with providers
-│   │   │   ├── providers.tsx         # TanStack Query setup
-│   │   │   └── globals.css           # Design tokens & utilities
-│   │   └── components/
-│   │       ├── landing/              # Landing page components
-│   │       │   ├── index.tsx         # Main landing component
-│   │       │   └── navbar.tsx        # Navigation header
-│   │       └── dashboard/            # Dashboard feature components
-│   │           ├── index.tsx         # Dashboard orchestrator
-│   │           ├── sidebar.tsx       # Left navigation
-│   │           ├── course-extraction.tsx
-│   │           ├── feasibility.tsx
-│   │           └── simulator.tsx
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── tailwind.config.ts
-│
-└── backend/                           # FastAPI + Python
-    ├── app/
-    │   ├── main.py                   # FastAPI app entry point
-    │   └── __init__.py
-    ├── requirements.txt              # Python dependencies
-    └── .gitignore
-```
-
-## 🛠 Tech Stack
-
-**Frontend:**
-- Next.js 15.5+ (React 18.2)
-- TypeScript 5.3
-- Tailwind CSS 3.4
-- Framer Motion 10.16 (animations)
-- TanStack Query 5.28 (data fetching)
-- Lucide React 0.395 (icons)
-
-**Backend:**
-- FastAPI 0.112
-- Uvicorn 0.30
-- Pydantic 2.8
-- SQLAlchemy 2.0
-- PostgreSQL (via psycopg 3.2)
-
-## 🎨 Design System
-
-- **Color Palette:** Slate-950 base with cyan (06b6d4) & blue (0ea5e9) accents
-- **Effects:** Glass morphism with backdrop-blur
-- **Typography:** Bold, clean sans-serif headers
-- **Animations:** Smooth transitions with Framer Motion
-
-## 📝 Available Scripts
-
-**Frontend:**
 ```bash
-npm run dev      # Start development server
-npm run build    # Build for production
-npm run start    # Start production server
-npm run lint     # Run ESLint
+cd frontend
+npm run lint
 ```
 
-**Backend:**
+Backend tests:
+
 ```bash
-uvicorn app.main:app --reload          # Development with auto-reload
-uvicorn app.main:app --host 0.0.0.0    # Production
+cd backend
+source venv/bin/activate
+pip install pytest
+python -m pytest -q
 ```
 
-## 🔗 API Endpoints (Current)
+Note: `pytest` is used by `backend/test/*` but is not pinned in `backend/requirements.txt`.
 
-- `GET /health` – Health check
-- `GET /courses` – List courses (stub)
-- `POST /courses` – Create course (stub)
-- `GET /docs` – Swagger UI documentation
+## Known Limitations
 
-## Architecture Sketch (ITR1)
+- In-memory backend storage only (no DB persistence yet)
+- No authentication or per-user data isolation
+- Upload page does not perform real file parsing yet
+- Frontend route `/explore` exists but is currently empty; main explorer is `/setup/explore`
 
-![ITR1 Architecture Sketch](docs/architecture/itr1-architecture.png)
+## Iteration Artifacts
 
-
-## 📧 Questions?
-
-Refer to `docs/` folder for detailed user stories and design specifications.
+- Architecture sketch: `docs/architecture/itr1-architecture.png`
+- Team process and sprint log: `log.md`
+- Planning/design PDFs in project root (ITR0/ITR1 artifacts)
