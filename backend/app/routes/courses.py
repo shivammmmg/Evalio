@@ -5,8 +5,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.dependencies import get_course_service
+from app.dependencies import get_course_service, get_current_user
 from app.models import CourseCreate
+from app.services.auth_service import AuthenticatedUser
 from app.services.course_service import (
     CourseNotFoundError,
     CourseService,
@@ -53,9 +54,10 @@ class WhatIfRequest(BaseModel):
 def create_course(
     course: CourseCreate,
     service: CourseService = Depends(get_course_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
-        return service.create_course(course)
+        return service.create_course(user_id=current_user.user_id, course=course)
     except CourseValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -63,8 +65,9 @@ def create_course(
 @router.get("/")
 def list_courses(
     service: CourseService = Depends(get_course_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
-    return service.list_courses()
+    return service.list_courses(user_id=current_user.user_id)
 
 
 @router.put("/{course_id}/weights")
@@ -72,9 +75,11 @@ def update_course_weights(
     course_id: UUID,
     payload: CourseWeightsUpdateRequest,
     service: CourseService = Depends(get_course_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
         return service.update_course_weights(
+            user_id=current_user.user_id,
             course_id=course_id,
             assessments=[assessment.model_dump() for assessment in payload.assessments],
         )
@@ -89,9 +94,11 @@ def update_course_grades(
     course_id: UUID,
     payload: CourseGradesUpdateRequest,
     service: CourseService = Depends(get_course_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
         return service.update_course_grades(
+            user_id=current_user.user_id,
             course_id=course_id,
             assessments=[assessment.model_dump() for assessment in payload.assessments],
         )
@@ -106,9 +113,14 @@ def check_target_feasibility(
     course_id: UUID,
     payload: TargetGradeRequest,
     service: CourseService = Depends(get_course_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
-        return service.check_target_feasibility(course_id=course_id, target=payload.target)
+        return service.check_target_feasibility(
+            user_id=current_user.user_id,
+            course_id=course_id,
+            target=payload.target,
+        )
     except CourseNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -118,6 +130,7 @@ def get_minimum_required_score(
     course_id: UUID,
     payload: MinimumRequiredRequest,
     service: CourseService = Depends(get_course_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
     SCRUM-61: API endpoint for minimum required score calculation.
@@ -125,6 +138,7 @@ def get_minimum_required_score(
     """
     try:
         return service.get_minimum_required_score(
+            user_id=current_user.user_id,
             course_id=course_id,
             target=payload.target,
             assessment_name=payload.assessment_name,
@@ -140,6 +154,7 @@ def run_whatif_scenario(
     course_id: UUID,
     payload: WhatIfRequest,
     service: CourseService = Depends(get_course_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
     SCRUM-67: API endpoint for what-if scenario analysis.
@@ -147,6 +162,7 @@ def run_whatif_scenario(
     """
     try:
         return service.run_whatif_scenario(
+            user_id=current_user.user_id,
             course_id=course_id,
             assessment_name=payload.assessment_name,
             hypothetical_score=payload.hypothetical_score,

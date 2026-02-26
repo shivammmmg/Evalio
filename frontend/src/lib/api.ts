@@ -1,5 +1,5 @@
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export type CourseAssessment = {
   name: string;
@@ -87,30 +87,82 @@ export type ApiError = Error & {
   };
 };
 
+export type UserProfile = {
+  user_id: string;
+  email: string;
+};
+
 function getDetail(body: unknown): string | null {
   if (!body || typeof body !== "object") return null;
   const detail = (body as { detail?: unknown }).detail;
   return typeof detail === "string" && detail.trim() ? detail : null;
 }
 
-async function request(path: string, options?: RequestInit) {
+type RequestOptions = RequestInit & {
+  skipAuthRedirect?: boolean;
+};
+
+async function request(path: string, options?: RequestOptions) {
+  const { skipAuthRedirect = false, ...requestOptions } = options ?? {};
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
+    ...requestOptions,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(options?.headers ?? {}),
+      ...(requestOptions.headers ?? {}),
     },
   });
 
   if (!response.ok) {
     const body = await response.json().catch(() => undefined);
+    if (
+      response.status === 401 &&
+      !skipAuthRedirect &&
+      !path.startsWith("/auth/") &&
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/login")
+    ) {
+      const next = encodeURIComponent(window.location.pathname);
+      window.location.assign(`/login?next=${next}`);
+    }
     const message = getDetail(body) ?? `Request failed: ${response.status}`;
     const error = new Error(message) as ApiError;
     error.response = { data: body };
     throw error;
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text) return null;
+  return JSON.parse(text);
+}
+
+export function register(payload: { email: string; password: string }) {
+  return request("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    skipAuthRedirect: true,
+  }) as Promise<{ message: string; user: UserProfile }>;
+}
+
+export function login(payload: { email: string; password: string }) {
+  return request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    skipAuthRedirect: true,
+  }) as Promise<{ message: string }>;
+}
+
+export function logout() {
+  return request("/auth/logout", {
+    method: "POST",
+    skipAuthRedirect: true,
+  }) as Promise<{ message: string }>;
+}
+
+export function getMe() {
+  return request("/auth/me", {
+    skipAuthRedirect: true,
+  }) as Promise<UserProfile>;
 }
 
 export function listCourses() {

@@ -28,7 +28,7 @@ class CourseService:
     def __init__(self, repository: CourseRepository):
         self._repository = repository
 
-    def create_course(self, course: CourseCreate) -> dict:
+    def create_course(self, user_id: UUID, course: CourseCreate) -> dict:
         if not course.assessments:
             raise CourseValidationError("At least one assessment is required")
 
@@ -36,7 +36,7 @@ class CourseService:
         if total_weight > 100:
             raise CourseValidationError("Total assessment weight cannot exceed 100%")
 
-        stored = self._repository.create(course)
+        stored = self._repository.create(user_id=user_id, course=course)
         return {
             "message": "Course created successfully",
             "total_weight": total_weight,
@@ -44,14 +44,14 @@ class CourseService:
             "course": stored.course,
         }
 
-    def list_courses(self) -> list[dict]:
-        stored_courses = self._repository.list_all()
+    def list_courses(self, user_id: UUID) -> list[dict]:
+        stored_courses = self._repository.list_all(user_id=user_id)
         return [
             {"course_id": stored.course_id, **stored.course.model_dump()}
             for stored in stored_courses
         ]
 
-    def update_course_weights(self, course_id: UUID, assessments: list[dict]) -> dict:
+    def update_course_weights(self, user_id: UUID, course_id: UUID, assessments: list[dict]) -> dict:
         if not assessments:
             raise CourseValidationError("At least one assessment weight update is required")
 
@@ -76,7 +76,7 @@ class CourseService:
         if total_weight != Decimal("100"):
             raise CourseValidationError("Total assessment weight must equal 100%")
 
-        stored = self._get_course_or_raise(course_id)
+        stored = self._get_course_or_raise(user_id=user_id, course_id=course_id)
         existing_assessments = {
             assessment.name: assessment for assessment in stored.course.assessments
         }
@@ -95,8 +95,8 @@ class CourseService:
         for assessment in assessments:
             existing_assessments[assessment["name"]].weight = float(assessment["weight"])
 
-        self._repository.update(course_id, stored.course)
-        course_index = self._repository.get_index(course_id)
+        self._repository.update(user_id=user_id, course_id=course_id, course=stored.course)
+        course_index = self._repository.get_index(user_id=user_id, course_id=course_id)
 
         return {
             "message": "Assessment weights updated successfully",
@@ -106,11 +106,11 @@ class CourseService:
             "course": stored.course,
         }
 
-    def update_course_grades(self, course_id: UUID, assessments: list[dict]) -> dict:
+    def update_course_grades(self, user_id: UUID, course_id: UUID, assessments: list[dict]) -> dict:
         if not assessments:
             raise CourseValidationError("At least one assessment grade update is required")
 
-        stored = self._get_course_or_raise(course_id)
+        stored = self._get_course_or_raise(user_id=user_id, course_id=course_id)
         existing_assessments = {
             assessment.name: assessment for assessment in stored.course.assessments
         }
@@ -159,9 +159,9 @@ class CourseService:
                 existing.raw_score = raw_score
                 existing.total_score = total_score
 
-        self._repository.update(course_id, stored.course)
+        self._repository.update(user_id=user_id, course_id=course_id, course=stored.course)
         current_standing = calculate_current_standing(stored.course)
-        course_index = self._repository.get_index(course_id)
+        course_index = self._repository.get_index(user_id=user_id, course_id=course_id)
 
         return {
             "message": "Assessment grades updated successfully",
@@ -179,8 +179,8 @@ class CourseService:
             ]
         }
 
-    def check_target_feasibility(self, course_id: UUID, target: float) -> dict:
-        stored = self._get_course_or_raise(course_id)
+    def check_target_feasibility(self, user_id: UUID, course_id: UUID, target: float) -> dict:
+        stored = self._get_course_or_raise(user_id=user_id, course_id=course_id)
         current_standing = calculate_current_standing(stored.course)
 
         remaining_potential = sum(
@@ -217,9 +217,9 @@ class CourseService:
         }
 
     def get_minimum_required_score(
-        self, course_id: UUID, target: float, assessment_name: str
+        self, user_id: UUID, course_id: UUID, target: float, assessment_name: str
     ) -> dict:
-        stored = self._get_course_or_raise(course_id)
+        stored = self._get_course_or_raise(user_id=user_id, course_id=course_id)
         try:
             result = calculate_minimum_required_score(
                 course=stored.course,
@@ -231,9 +231,9 @@ class CourseService:
         return {"course_id": course_id, **result}
 
     def run_whatif_scenario(
-        self, course_id: UUID, assessment_name: str, hypothetical_score: float
+        self, user_id: UUID, course_id: UUID, assessment_name: str, hypothetical_score: float
     ) -> dict:
-        stored = self._get_course_or_raise(course_id)
+        stored = self._get_course_or_raise(user_id=user_id, course_id=course_id)
         try:
             result = calculate_whatif_scenario(
                 course=stored.course,
@@ -244,8 +244,8 @@ class CourseService:
             raise CourseValidationError(str(exc)) from exc
         return {"course_id": course_id, **result}
 
-    def _get_course_or_raise(self, course_id: UUID) -> StoredCourse:
-        stored = self._repository.get_by_id(course_id)
+    def _get_course_or_raise(self, user_id: UUID, course_id: UUID) -> StoredCourse:
+        stored = self._repository.get_by_id(user_id=user_id, course_id=course_id)
         if stored is None:
             raise CourseNotFoundError(f"Course not found for id {course_id}")
         return stored

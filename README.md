@@ -105,11 +105,28 @@ To override, create `frontend/.env.local`:
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 ```
 
+### 5. Optional Backend Auth/CORS Env Variables
+
+Create `backend/.env` (optional):
+
+```bash
+AUTH_SECRET_KEY=change-this-in-real-env
+AUTH_ALGORITHM=HS256
+AUTH_ACCESS_TOKEN_EXPIRE_MINUTES=480
+AUTH_COOKIE_NAME=evalio_access_token
+AUTH_COOKIE_SECURE=false
+FRONTEND_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+```
+
 ## API Endpoints
 
 Base URL: `http://127.0.0.1:8000`
 
 - `GET /health`
+- `POST /auth/register`
+- `POST /auth/login`
+- `POST /auth/logout`
+- `GET /auth/me`
 - `GET /courses/`
 - `POST /courses/`
 - `PUT /courses/{course_id}/weights`
@@ -134,6 +151,7 @@ Example create-course payload:
 
 Create/list course responses now include a `course_id` UUID used by all
 `/courses/{course_id}/...` operations.
+All `/courses/*` endpoints require authentication via HttpOnly cookie session.
 
 ## Frontend Workflow
 
@@ -189,7 +207,7 @@ Note: `pytest` is used by `backend/test/*` but is not pinned in `backend/require
 ## Known Limitations
 
 - In-memory backend storage only (no DB persistence yet)
-- No authentication or per-user data isolation
+- No persistent user/course data across backend restarts
 - Upload page does not perform real file parsing yet
 - Frontend route `/explore` exists but is currently empty; main explorer is `/setup/explore`
 

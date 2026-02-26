@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SetupCourseProvider } from "@/app/setup/course-context";
+import { getMe } from "@/lib/api";
 
 export default function SetupLayout({
   children,
@@ -10,7 +12,36 @@ export default function SetupLayout({
 }) {
   const pathname = usePathname() || "";
   const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
   const showStepProgress = !pathname.startsWith("/setup/explore");
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function verifySession() {
+      try {
+        await getMe();
+        if (mounted) {
+          setAuthChecked(true);
+        }
+      } catch {
+        if (mounted) {
+          const next = encodeURIComponent(pathname || "/setup/upload");
+          router.replace(`/login?next=${next}`);
+        }
+      }
+    }
+
+    verifySession();
+
+    return () => {
+      mounted = false;
+    };
+  }, [pathname, router]);
+
+  if (!authChecked) {
+    return <div className="p-8 text-sm text-gray-500">Checking session...</div>;
+  }
 
   const activeStep = (() => {
     if (pathname === "/setup" || pathname === "/setup/") return 1;

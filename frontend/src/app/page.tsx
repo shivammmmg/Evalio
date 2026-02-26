@@ -6,7 +6,7 @@ export default function Home() {
     <main className="flex min-h-screen flex-col items-center justify-center text-center">
       <h1 className="text-4xl font-bold">Welcome to Evalio</h1>
       <Link
-        href="/setup/upload"
+        href="/login?next=%2Fsetup%2Fupload"
         className="mt-6 bg-black text-white px-6 py-2 rounded"
       >
         Get Started
