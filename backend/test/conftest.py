@@ -1,8 +1,9 @@
 import pytest
-from app.routes import courses
+
+from app.dependencies import get_course_repo
 
 @pytest.fixture(autouse=True)
 def clear_courses_db():
-    courses.courses_db.clear()
+    get_course_repo().clear()
     yield
-    courses.courses_db.clear()
+    get_course_repo().clear()

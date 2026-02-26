@@ -9,9 +9,17 @@ export type CourseAssessment = {
 };
 
 export type Course = {
+  course_id: string;
   name: string;
   term?: string | null;
   assessments: CourseAssessment[];
+};
+
+export type CreateCourseResponse = {
+  message: string;
+  total_weight: number;
+  course_id: string;
+  course: Omit<Course, "course_id">;
 };
 
 export type YorkEquivalent = {
@@ -36,7 +44,8 @@ export type TargetCheckResponse = {
 
 export type UpdateCourseGradesResponse = {
   message: string;
-  course_index: number;
+  course_id: string;
+  course_index?: number;
   current_standing: number;
   assessments: Array<{
     name: string;
@@ -72,6 +81,18 @@ export type MinimumRequiredResponse = {
   explanation: string;
 };
 
+export type ApiError = Error & {
+  response?: {
+    data?: unknown;
+  };
+};
+
+function getDetail(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null;
+  const detail = (body as { detail?: unknown }).detail;
+  return typeof detail === "string" && detail.trim() ? detail : null;
+}
+
 async function request(path: string, options?: RequestInit) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
@@ -82,14 +103,11 @@ async function request(path: string, options?: RequestInit) {
   });
 
   if (!response.ok) {
-    let message = `Request failed: ${response.status}`;
-    try {
-      const body = await response.json();
-      if (body?.detail) message = body.detail;
-    } catch {
-      // keep fallback message
-    }
-    throw new Error(message);
+    const body = await response.json().catch(() => undefined);
+    const message = getDetail(body) ?? `Request failed: ${response.status}`;
+    const error = new Error(message) as ApiError;
+    error.response = { data: body };
+    throw error;
   }
 
   return response.json();
@@ -112,21 +130,21 @@ export function createCourse(payload: {
   return request("/courses/", {
     method: "POST",
     body: JSON.stringify(payload),
-  });
+  }) as Promise<CreateCourseResponse>;
 }
 
 export function updateCourseWeights(
-  courseIndex: number,
+  courseId: string,
   payload: { assessments: Array<{ name: string; weight: number }> }
 ) {
-  return request(`/courses/${courseIndex}/weights`, {
+  return request(`/courses/${courseId}/weights`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
 }
 
 export function updateCourseGrades(
-  courseIndex: number,
+  courseId: string,
   payload: {
     assessments: Array<{
       name: string;
@@ -135,34 +153,34 @@ export function updateCourseGrades(
     }>;
   }
 ) {
-  return request(`/courses/${courseIndex}/grades`, {
+  return request(`/courses/${courseId}/grades`, {
     method: "PUT",
     body: JSON.stringify(payload),
   }) as Promise<UpdateCourseGradesResponse>;
 }
 
-export function checkTarget(courseIndex: number, payload: { target: number }) {
-  return request(`/courses/${courseIndex}/target`, {
+export function checkTarget(courseId: string, payload: { target: number }) {
+  return request(`/courses/${courseId}/target`, {
     method: "POST",
     body: JSON.stringify(payload),
   }) as Promise<TargetCheckResponse>;
 }
 
 export function runWhatIf(
-  courseIndex: number,
+  courseId: string,
   payload: { assessment_name: string; hypothetical_score: number }
 ) {
-  return request(`/courses/${courseIndex}/whatif`, {
+  return request(`/courses/${courseId}/whatif`, {
     method: "POST",
     body: JSON.stringify(payload),
   }) as Promise<WhatIfResponse>;
 }
 
 export function getMinimumRequired(
-  courseIndex: number,
+  courseId: string,
   payload: { target: number; assessment_name: string }
 ) {
-  return request(`/courses/${courseIndex}/minimum-required`, {
+  return request(`/courses/${courseId}/minimum-required`, {
     method: "POST",
     body: JSON.stringify(payload),
   }) as Promise<MinimumRequiredResponse>;

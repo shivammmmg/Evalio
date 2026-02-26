@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Circle, RotateCcw, X } from "lucide-react";
 import { listCourses, updateCourseGrades } from "@/lib/api";
+import { useSetupCourse } from "@/app/setup/course-context";
+import { getApiErrorMessage } from "@/lib/errors";
 
 type Assessment = {
   id: number;
@@ -28,27 +30,23 @@ function isPartial(raw: number | null, total: number | null): boolean {
 export function GradesStep() {
   const router = useRouter();
   const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [courseIndex, setCourseIndex] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const { courseId, ensureCourseIdFromList } = useSetupCourse();
 
   useEffect(() => {
     const loadCourse = async () => {
       try {
-        const courses = (await listCourses()) as Array<{
-          assessments: Array<{
-            name: string;
-            weight: number;
-            raw_score?: number | null;
-            total_score?: number | null;
-          }>;
-        }>;
-        if (courses.length === 0) {
+        const courses = await listCourses();
+        const resolvedCourseId = ensureCourseIdFromList(courses);
+        if (!resolvedCourseId) {
           setError("No course found. Complete structure first.");
           return;
         }
-        const latestIndex = courses.length - 1;
-        const latest = courses[latestIndex];
-        setCourseIndex(latestIndex);
+        const latest = courses.find((course) => course.course_id === resolvedCourseId);
+        if (!latest) {
+          setError("No course found. Complete structure first.");
+          return;
+        }
         setAssessments(
           latest.assessments.map((a, i) => ({
             id: i + 1,
@@ -61,12 +59,12 @@ export function GradesStep() {
           }))
         );
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load grades.");
+        setError(getApiErrorMessage(e, "Failed to load grades."));
       }
     };
 
     loadCourse();
-  }, []);
+  }, [ensureCourseIdFromList]);
 
   const graded = assessments.filter((a) => {
     const raw = parseNumberOrNull(a.raw_score);
@@ -104,7 +102,7 @@ export function GradesStep() {
   };
 
   const handleScoreBlur = async (assessment: Assessment) => {
-    if (courseIndex === null) return;
+    if (!courseId) return;
 
     const raw = parseNumberOrNull(assessment.raw_score);
     const total = parseNumberOrNull(assessment.total_score);
@@ -120,23 +118,23 @@ export function GradesStep() {
     }
 
     try {
-      await updateCourseGrades(courseIndex, {
+      await updateCourseGrades(courseId, {
         assessments: [{ name: assessment.name, raw_score: raw, total_score: total }],
       });
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save grade.");
+      setError(getApiErrorMessage(e, "Failed to save grade."));
     }
   };
 
   const handleResetAllGrades = async () => {
-    if (courseIndex === null) {
+    if (!courseId) {
       setError("No course found. Complete structure first.");
       return;
     }
 
     try {
-      await updateCourseGrades(courseIndex, {
+      await updateCourseGrades(courseId, {
         assessments: assessments.map((assessment) => ({
           name: assessment.name,
           raw_score: null,
@@ -152,18 +150,18 @@ export function GradesStep() {
       );
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to reset grades.");
+      setError(getApiErrorMessage(e, "Failed to reset grades."));
     }
   };
 
   const handleClearSingleGrade = async (assessment: Assessment) => {
-    if (courseIndex === null) {
+    if (!courseId) {
       setError("No course found. Complete structure first.");
       return;
     }
 
     try {
-      await updateCourseGrades(courseIndex, {
+      await updateCourseGrades(courseId, {
         assessments: [{ name: assessment.name, raw_score: null, total_score: null }],
       });
       setAssessments((prev) =>
@@ -173,7 +171,7 @@ export function GradesStep() {
       );
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to clear grade.");
+      setError(getApiErrorMessage(e, "Failed to clear grade."));
     }
   };
 

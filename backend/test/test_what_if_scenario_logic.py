@@ -16,26 +16,28 @@ def _create_course():
     }
     r = client.post("/courses/", json=payload)
     assert r.status_code == 200
+    return r.json()["course_id"]
 
-def _set_percent(assessment_name: str, percent: float):
+def _set_percent(course_id: str, assessment_name: str, percent: float):
     r = client.put(
-        "/courses/0/grades",
+        f"/courses/{course_id}/grades",
         json={"assessments": [{"name": assessment_name, "raw_score": percent, "total_score": 100}]},
     )
     assert r.status_code == 200
 
-def _get_course():
-    return client.get("/courses/").json()[0]
+def _get_course(course_id: str):
+    courses = client.get("/courses/").json()
+    return next(course for course in courses if course["course_id"] == course_id)
 
 def test_what_if_real_grades_unchanged():
-    _create_course()
-    _set_percent("A1", 80)
+    course_id = _create_course()
+    _set_percent(course_id, "A1", 80)
 
-    before = _get_course()
+    before = _get_course(course_id)
     before_copy = copy.deepcopy(before)
 
     r = client.post(
-        "/courses/0/whatif",
+        f"/courses/{course_id}/whatif",
         json={"assessment_name": "Final", "hypothetical_score": 90},
     )
     assert r.status_code == 200
@@ -44,42 +46,42 @@ def test_what_if_real_grades_unchanged():
     assert data["current_standing"] == pytest.approx(16.0)
     assert data["projected_grade"] == pytest.approx(88.0)
 
-    after = _get_course()
+    after = _get_course(course_id)
     assert after == before_copy
 
 def test_what_if_boundary_values_0_and_100():
-    _create_course()
-    _set_percent("A1", 80)
+    course_id = _create_course()
+    _set_percent(course_id, "A1", 80)
 
-    r0 = client.post("/courses/0/whatif", json={"assessment_name": "Final", "hypothetical_score": 0})
+    r0 = client.post(f"/courses/{course_id}/whatif", json={"assessment_name": "Final", "hypothetical_score": 0})
     assert r0.status_code == 200
     assert r0.json()["projected_grade"] == pytest.approx(16.0)
 
-    r100 = client.post("/courses/0/whatif", json={"assessment_name": "Final", "hypothetical_score": 100})
+    r100 = client.post(f"/courses/{course_id}/whatif", json={"assessment_name": "Final", "hypothetical_score": 100})
     assert r100.status_code == 200
     assert r100.json()["projected_grade"] == pytest.approx(96.0)
 
 def test_repeated_what_if_calls_consistent_and_non_mutating():
-    _create_course()
-    _set_percent("A1", 80)
+    course_id = _create_course()
+    _set_percent(course_id, "A1", 80)
 
-    before = _get_course()
+    before = _get_course(course_id)
 
-    r1 = client.post("/courses/0/whatif", json={"assessment_name": "Final", "hypothetical_score": 75})
-    r2 = client.post("/courses/0/whatif", json={"assessment_name": "Final", "hypothetical_score": 75})
+    r1 = client.post(f"/courses/{course_id}/whatif", json={"assessment_name": "Final", "hypothetical_score": 75})
+    r2 = client.post(f"/courses/{course_id}/whatif", json={"assessment_name": "Final", "hypothetical_score": 75})
     assert r1.status_code == 200
     assert r2.status_code == 200
     assert r1.json()["projected_grade"] == r2.json()["projected_grade"]
 
-    after = _get_course()
+    after = _get_course(course_id)
     assert after == before
 
 def test_what_if_rejects_unknown_or_already_graded_assessment():
-    _create_course()
-    _set_percent("A1", 80)
+    course_id = _create_course()
+    _set_percent(course_id, "A1", 80)
 
-    r = client.post("/courses/0/whatif", json={"assessment_name": "DoesNotExist", "hypothetical_score": 50})
+    r = client.post(f"/courses/{course_id}/whatif", json={"assessment_name": "DoesNotExist", "hypothetical_score": 50})
     assert r.status_code == 400
 
-    r2 = client.post("/courses/0/whatif", json={"assessment_name": "A1", "hypothetical_score": 50})
+    r2 = client.post(f"/courses/{course_id}/whatif", json={"assessment_name": "A1", "hypothetical_score": 50})
     assert r2.status_code == 400

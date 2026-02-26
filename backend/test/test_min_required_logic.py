@@ -16,27 +16,28 @@ def _create_course_20_30_50():
     }
     r = client.post("/courses/", json=payload)
     assert r.status_code == 200
+    return r.json()["course_id"]
 
-def _set_percent(name: str, percent: float):
+def _set_percent(course_id: str, name: str, percent: float):
     # percent as raw_score out of 100
-    r = client.put("/courses/0/grades", json={
+    r = client.put(f"/courses/{course_id}/grades", json={
         "assessments": [{"name": name, "raw_score": percent, "total_score": 100}]
     })
     assert r.status_code == 200
     return r
 
 def test_min_required_exact_boundary_hits_target():
-    _create_course_20_30_50()
+    course_id = _create_course_20_30_50()
 
     # A1 = 80% => standing = 80*20/100 = 16
-    r1 = _set_percent("A1", 80)
+    r1 = _set_percent(course_id, "A1", 80)
     assert r1.json()["current_standing"] == 16.0
 
     # Target 80% on Midterm (30%) assuming Final (50%) = 100%
     # points needed from Midterm:
     # target - (standing + FinalWeight) = 80 - (16 + 50) = 14
     # required percent on Midterm = 14 / 30 * 100 = 46.666...
-    r = client.post("/courses/0/minimum-required", json={
+    r = client.post(f"/courses/{course_id}/minimum-required", json={
         "target": 80,
         "assessment_name": "Midterm",
     })
@@ -47,13 +48,13 @@ def test_min_required_exact_boundary_hits_target():
     assert data["is_achievable"] is True
 
 def test_min_required_already_achieved_returns_0():
-    _create_course_20_30_50()
+    course_id = _create_course_20_30_50()
 
     # If A1=100 (20 points) and Midterm=100 (30 points), standing = 50 already.
-    _set_percent("A1", 100)
-    _set_percent("Midterm", 100)
+    _set_percent(course_id, "A1", 100)
+    _set_percent(course_id, "Midterm", 100)
 
-    r = client.post("/courses/0/minimum-required", json={
+    r = client.post(f"/courses/{course_id}/minimum-required", json={
         "target": 40,                  # already achieved
         "assessment_name": "Final",     # still ungraded
     })
@@ -73,9 +74,10 @@ def test_min_required_required_score_over_100_not_achievable():
     }
     r = client.post("/courses/", json=payload)
     assert r.status_code == 200
+    course_id = r.json()["course_id"]
 
     # A1 = 10% => standing = 10*90/100 = 9
-    r2 = client.put("/courses/0/grades", json={
+    r2 = client.put(f"/courses/{course_id}/grades", json={
         "assessments": [{"name": "A1", "raw_score": 10, "total_score": 100}]
     })
     assert r2.status_code == 200
@@ -83,7 +85,7 @@ def test_min_required_required_score_over_100_not_achievable():
 
     # Need target 95 on Final (10%) assuming nothing else remains.
     # required points = 95 - 9 = 86, required % on final = 86/10*100 = 860%
-    r3 = client.post("/courses/0/minimum-required", json={
+    r3 = client.post(f"/courses/{course_id}/minimum-required", json={
         "target": 95,
         "assessment_name": "Final",
     })
@@ -103,9 +105,10 @@ def test_min_required_single_remaining_assessment():
     }
     r = client.post("/courses/", json=payload)
     assert r.status_code == 200
+    course_id = r.json()["course_id"]
 
     # A1=80 => standing=56
-    r2 = client.put("/courses/0/grades", json={
+    r2 = client.put(f"/courses/{course_id}/grades", json={
         "assessments": [{"name": "A1", "raw_score": 80, "total_score": 100}]
     })
     assert r2.status_code == 200
@@ -113,7 +116,7 @@ def test_min_required_single_remaining_assessment():
 
     # Need target 80 => points needed = 24
     # required % on Final (30%) = 24/30*100 = 80
-    r3 = client.post("/courses/0/minimum-required", json={
+    r3 = client.post(f"/courses/{course_id}/minimum-required", json={
         "target": 80,
         "assessment_name": "Final",
     })
@@ -123,18 +126,18 @@ def test_min_required_single_remaining_assessment():
     assert data["is_achievable"] is True
 
 def test_min_required_rejects_unknown_or_already_graded_assessment():
-    _create_course_20_30_50()
-    _set_percent("A1", 80)
+    course_id = _create_course_20_30_50()
+    _set_percent(course_id, "A1", 80)
 
     # unknown assessment
-    r = client.post("/courses/0/minimum-required", json={
+    r = client.post(f"/courses/{course_id}/minimum-required", json={
         "target": 80,
         "assessment_name": "Quiz1",
     })
     assert r.status_code == 400
 
     # already graded assessment should be rejected
-    r2 = client.post("/courses/0/minimum-required", json={
+    r2 = client.post(f"/courses/{course_id}/minimum-required", json={
         "target": 80,
         "assessment_name": "A1",
     })

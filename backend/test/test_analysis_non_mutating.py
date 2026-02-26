@@ -15,35 +15,38 @@ def _create_course():
     }
     r = client.post("/courses/", json=payload)
     assert r.status_code == 200
+    return r.json()["course_id"]
 
 def test_target_check_does_not_change_grades():
-    _create_course()
+    course_id = _create_course()
 
     r1 = client.put(
-        "/courses/0/grades",
+        f"/courses/{course_id}/grades",
         json={"assessments": [{"name": "A1", "raw_score": 80, "total_score": 100}]},
     )
     assert r1.status_code == 200
 
     before = client.get("/courses/").json()
+    current_course = next(course for course in before if course["course_id"] == course_id)
     before_state = [
-        (a["name"], a["raw_score"], a["total_score"]) for a in before[0]["assessments"]
+        (a["name"], a["raw_score"], a["total_score"]) for a in current_course["assessments"]
     ]
 
-    r2 = client.post("/courses/0/target", json={"target": 85})
+    r2 = client.post(f"/courses/{course_id}/target", json={"target": 85})
     assert r2.status_code == 200
 
     after = client.get("/courses/").json()
+    current_after = next(course for course in after if course["course_id"] == course_id)
     after_state = [
-        (a["name"], a["raw_score"], a["total_score"]) for a in after[0]["assessments"]
+        (a["name"], a["raw_score"], a["total_score"]) for a in current_after["assessments"]
     ]
 
     assert before_state == after_state
 
 def test_repeated_target_calls_consistent():
-    _create_course()
-    r1 = client.post("/courses/0/target", json={"target": 70})
-    r2 = client.post("/courses/0/target", json={"target": 70})
+    course_id = _create_course()
+    r1 = client.post(f"/courses/{course_id}/target", json={"target": 70})
+    r2 = client.post(f"/courses/{course_id}/target", json={"target": 70})
     assert r1.status_code == 200
     assert r2.status_code == 200
     assert r1.json() == r2.json()

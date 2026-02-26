@@ -15,29 +15,30 @@ def _create_course():
     }
     r = client.post("/courses/", json=payload)
     assert r.status_code == 200
+    return r.json()["course_id"]
 
 def test_current_standing_partial_grade():
-    _create_course()
+    course_id = _create_course()
     r = client.put(
-        "/courses/0/grades",
+        f"/courses/{course_id}/grades",
         json={"assessments": [{"name": "A1", "raw_score": 80, "total_score": 100}]},
     )
     assert r.status_code == 200
     assert r.json()["current_standing"] == 16.0
 
 def test_current_standing_boundary_0():
-    _create_course()
+    course_id = _create_course()
     r = client.put(
-        "/courses/0/grades",
+        f"/courses/{course_id}/grades",
         json={"assessments": [{"name": "A1", "raw_score": 0, "total_score": 100}]},
     )
     assert r.status_code == 200
     assert r.json()["current_standing"] == 0.0
 
 def test_current_standing_boundary_100():
-    _create_course()
+    course_id = _create_course()
     r = client.put(
-        "/courses/0/grades",
+        f"/courses/{course_id}/grades",
         json={"assessments": [{"name": "A1", "raw_score": 100, "total_score": 100}]},
     )
     assert r.status_code == 200

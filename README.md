@@ -18,7 +18,7 @@ Evalio helps students model course assessments, track current standing, test tar
 ## Current Architecture
 
 - `frontend/`: Next.js App Router app (TypeScript + Tailwind)
-- `backend/`: FastAPI app with in-memory storage (`courses_db`)
+- `backend/`: FastAPI app with in-memory repository storage
 - `backend/test/`: pytest suite for grading logic and endpoint behavior
 
 Important behavior today:
@@ -38,7 +38,9 @@ project-group-11-evalio/
 │   ├── app/
 │   │   ├── main.py                # FastAPI app + CORS + /health
 │   │   ├── models.py              # Pydantic course/assessment schemas
-│   │   └── routes/courses.py      # Core grading and analysis endpoints
+│   │   ├── repositories/          # Repository interface + in-memory implementation
+│   │   ├── services/              # Grading and course orchestration services
+│   │   └── routes/courses.py      # Thin API endpoints
 │   ├── test/                      # pytest coverage for ITR1 logic
 │   ├── requirements.txt
 │   └── README.md
@@ -110,11 +112,11 @@ Base URL: `http://127.0.0.1:8000`
 - `GET /health`
 - `GET /courses/`
 - `POST /courses/`
-- `PUT /courses/{course_index}/weights`
-- `PUT /courses/{course_index}/grades`
-- `POST /courses/{course_index}/target`
-- `POST /courses/{course_index}/minimum-required`
-- `POST /courses/{course_index}/whatif`
+- `PUT /courses/{course_id}/weights`
+- `PUT /courses/{course_id}/grades`
+- `POST /courses/{course_id}/target`
+- `POST /courses/{course_id}/minimum-required`
+- `POST /courses/{course_id}/whatif`
 
 Example create-course payload:
 
@@ -129,6 +131,9 @@ Example create-course payload:
   ]
 }
 ```
+
+Create/list course responses now include a `course_id` UUID used by all
+`/courses/{course_id}/...` operations.
 
 ## Frontend Workflow
 

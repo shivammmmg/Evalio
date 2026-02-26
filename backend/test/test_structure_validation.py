@@ -15,10 +15,11 @@ def _create_course():
     }
     r = client.post("/courses/", json=payload)
     assert r.status_code == 200
+    return r.json()["course_id"]
 
 def test_update_weights_success_total_100():
-    _create_course()
-    r = client.put("/courses/0/weights", json={
+    course_id = _create_course()
+    r = client.put(f"/courses/{course_id}/weights", json={
         "assessments": [
             {"name": "A1", "weight": "25"},
             {"name": "Midterm", "weight": "25"},
@@ -29,8 +30,8 @@ def test_update_weights_success_total_100():
     assert r.json()["total_weight"] == 100.0
 
 def test_update_weights_reject_total_not_100():
-    _create_course()
-    r = client.put("/courses/0/weights", json={
+    course_id = _create_course()
+    r = client.put(f"/courses/{course_id}/weights", json={
         "assessments": [
             {"name": "A1", "weight": "20"},
             {"name": "Midterm", "weight": "20"},
@@ -41,8 +42,8 @@ def test_update_weights_reject_total_not_100():
     assert "must equal 100" in r.json()["detail"]
 
 def test_update_weights_reject_duplicate_names():
-    _create_course()
-    r = client.put("/courses/0/weights", json={
+    course_id = _create_course()
+    r = client.put(f"/courses/{course_id}/weights", json={
         "assessments": [
             {"name": "A1", "weight": "50"},
             {"name": "A1", "weight": "50"},
@@ -53,8 +54,8 @@ def test_update_weights_reject_duplicate_names():
     assert "Duplicate assessment" in r.json()["detail"]
 
 def test_update_weights_reject_missing_assessment():
-    _create_course()
-    r = client.put("/courses/0/weights", json={
+    course_id = _create_course()
+    r = client.put(f"/courses/{course_id}/weights", json={
         "assessments": [
             {"name": "A1", "weight": "50"},
             {"name": "Final", "weight": "50"},
@@ -64,8 +65,8 @@ def test_update_weights_reject_missing_assessment():
     assert "Missing assessment updates" in r.json()["detail"]
 
 def test_update_weights_reject_unknown_assessment():
-    _create_course()
-    r = client.put("/courses/0/weights", json={
+    course_id = _create_course()
+    r = client.put(f"/courses/{course_id}/weights", json={
         "assessments": [
             {"name": "A1", "weight": "50"},
             {"name": "Midterm", "weight": "50"},
@@ -76,8 +77,8 @@ def test_update_weights_reject_unknown_assessment():
     assert "does not exist" in r.json()["detail"]
 
 def test_update_weights_reject_negative_weight():
-    _create_course()
-    r = client.put("/courses/0/weights", json={
+    course_id = _create_course()
+    r = client.put(f"/courses/{course_id}/weights", json={
         "assessments": [
             {"name": "A1", "weight": "-1"},
             {"name": "Midterm", "weight": "51"},

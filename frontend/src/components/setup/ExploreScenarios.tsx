@@ -10,6 +10,8 @@ import {
   type Course,
   type CourseAssessment,
 } from "@/lib/api";
+import { useSetupCourse } from "@/app/setup/course-context";
+import { getApiErrorMessage } from "@/lib/errors";
 
 type Assessment = CourseAssessment & {
   id: number;
@@ -33,10 +35,10 @@ function formatCompactNumber(value: number): string {
 export function ExploreScenarios() {
   const router = useRouter();
 
-  const [courseIndex, setCourseIndex] = useState<number | null>(null);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const { courseId, ensureCourseIdFromList } = useSetupCourse();
 
   const [activeScenario, setActiveScenario] = useState<Record<string, number>>({});
   const [activeAssessmentName, setActiveAssessmentName] = useState<string | null>(
@@ -47,14 +49,19 @@ export function ExploreScenarios() {
     const loadCourse = async () => {
       try {
         const courses = await listCourses();
-        if (!courses.length) {
+        const resolvedCourseId = ensureCourseIdFromList(courses);
+        if (!resolvedCourseId) {
           setError("No course found. Complete setup first.");
           return;
         }
 
-        const latestIndex = courses.length - 1;
-        const latest: Course = courses[latestIndex];
-        setCourseIndex(latestIndex);
+        const latest = courses.find(
+          (course) => course.course_id === resolvedCourseId
+        ) as Course | undefined;
+        if (!latest) {
+          setError("No course found. Complete setup first.");
+          return;
+        }
 
         const normalized = (latest.assessments ?? []).map((a, i) => ({
           ...a,
@@ -64,15 +71,15 @@ export function ExploreScenarios() {
         setAssessments(normalized);
         setError("");
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load course.");
+        setError(getApiErrorMessage(e, "Failed to load course."));
       }
     };
 
     loadCourse();
-  }, []);
+  }, [ensureCourseIdFromList]);
 
   useEffect(() => {
-    if (courseIndex === null || !activeAssessmentName) return;
+    if (!courseId || !activeAssessmentName) return;
 
     const assessment = assessments.find((a) => a.name === activeAssessmentName);
     if (!assessment || hasPersistedGrade(assessment)) return;
@@ -82,7 +89,7 @@ export function ExploreScenarios() {
 
     const timer = window.setTimeout(async () => {
       try {
-        await runWhatIf(courseIndex, {
+        await runWhatIf(courseId, {
           assessment_name: activeAssessmentName,
           hypothetical_score: clampPercent(value),
         });
@@ -92,7 +99,7 @@ export function ExploreScenarios() {
     }, 300);
 
     return () => window.clearTimeout(timer);
-  }, [courseIndex, activeAssessmentName, activeScenario, assessments]);
+  }, [courseId, activeAssessmentName, activeScenario, assessments]);
 
   const getActualGrade = (a: Assessment): number | undefined => {
     const raw = a.raw_score;
@@ -136,7 +143,7 @@ export function ExploreScenarios() {
   };
 
   const handleApplyToGrades = async () => {
-    if (courseIndex === null) {
+    if (!courseId) {
       setError("No course found. Complete setup first.");
       return;
     }
@@ -161,7 +168,7 @@ export function ExploreScenarios() {
 
     try {
       setSaving(true);
-      const response = await updateCourseGrades(courseIndex, {
+      const response = await updateCourseGrades(courseId, {
         assessments: updates,
       });
 
@@ -180,7 +187,7 @@ export function ExploreScenarios() {
 
       router.push("/setup/grades");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to apply scenario.");
+      setError(getApiErrorMessage(e, "Failed to apply scenario."));
     } finally {
       setSaving(false);
     }

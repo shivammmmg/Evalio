@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, TrendingUp } from "lucide-react";
+import { useSetupCourse } from "@/app/setup/course-context";
+import { getApiErrorMessage } from "@/lib/errors";
 import {
   checkTarget,
   getMinimumRequired,
@@ -56,6 +58,7 @@ export function Dashboard() {
   const [currentContribution, setCurrentContribution] = useState(0);
   const [targetGrade, setTargetGrade] = useState(DEFAULT_TARGET_GRADE);
   const [assumedPerformance, setAssumedPerformance] = useState(75);
+  const { ensureCourseIdFromList } = useSetupCourse();
 
   useEffect(() => {
     const load = async () => {
@@ -71,15 +74,23 @@ export function Dashboard() {
         setTargetGrade(resolvedTarget);
 
         const courses = await listCourses();
-        if (courses.length === 0) {
+        const resolvedCourseId = ensureCourseIdFromList(courses);
+        if (!resolvedCourseId) {
           setError("No course found. Complete setup first.");
           setAssessments([]);
           setTargetResult(null);
           return;
         }
 
-        const latestIndex = courses.length - 1;
-        const latest: Course = courses[latestIndex];
+        const latest = courses.find(
+          (course) => course.course_id === resolvedCourseId
+        ) as Course | undefined;
+        if (!latest) {
+          setError("No course found. Complete setup first.");
+          setAssessments([]);
+          setTargetResult(null);
+          return;
+        }
 
         const graded = latest.assessments.filter((a) => hasGrade(a));
         const gradedW = graded.reduce((sum, a) => sum + a.weight, 0);
@@ -91,7 +102,7 @@ export function Dashboard() {
         setGradedWeight(gradedW);
         setCurrentContribution(contribution);
 
-        const target = await checkTarget(latestIndex, { target: resolvedTarget });
+        const target = await checkTarget(resolvedCourseId, { target: resolvedTarget });
         setTargetResult(target);
 
         const rows = await Promise.all(
@@ -110,7 +121,7 @@ export function Dashboard() {
               } satisfies AssessmentRow;
             }
 
-            const minimum = await getMinimumRequired(latestIndex, {
+            const minimum = await getMinimumRequired(resolvedCourseId, {
               target: resolvedTarget,
               assessment_name: assessment.name,
             });
@@ -131,7 +142,7 @@ export function Dashboard() {
         setAssessments(rows);
         setError("");
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load dashboard.");
+        setError(getApiErrorMessage(e, "Failed to load dashboard."));
         setCurrentContribution(0);
       } finally {
         setLoading(false);
@@ -139,7 +150,7 @@ export function Dashboard() {
     };
 
     load();
-  }, []);
+  }, [ensureCourseIdFromList]);
 
   const currentGrade = targetResult?.current_standing ?? 0;
   const requiredAverage = targetResult?.required_average_display ?? "0.0%";
