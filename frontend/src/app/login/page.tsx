@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 
 import { getApiErrorMessage } from "@/lib/errors";
 import { getMe, login, register } from "@/lib/api";
@@ -18,13 +18,16 @@ function resolveNext(nextParam: string | null): string {
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const nextRoute = useMemo(
     () => resolveNext(searchParams.get("next")),
@@ -38,9 +41,15 @@ export default function LoginPage() {
     setMessage(null);
 
     try {
+      if (!email || !password) {
+        setError("Please fill in all fields");
+        return;
+      }
+
       if (mode === "register") {
         await register({ email, password });
         setMessage("Account created. Please sign in.");
+        setPassword("");
         setMode("login");
       } else {
         await login({ email, password });
@@ -56,6 +65,8 @@ export default function LoginPage() {
   async function onUseExistingSession() {
     setLoading(true);
     setError(null);
+    setMessage(null);
+
     try {
       await getMe();
       router.replace(nextRoute);
@@ -66,78 +77,129 @@ export default function LoginPage() {
     }
   }
 
+  function toggleMode() {
+    setMode((m) => (m === "login" ? "register" : "login"));
+    setError(null);
+    setMessage(null);
+    setPassword("");
+  }
+
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-      <div className="w-full max-w-md bg-white border rounded-xl p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold mb-2">Evalio</h1>
-        <p className="text-sm text-gray-600 mb-6">
-          {mode === "login" ? "Sign in to continue" : "Create an account"}
-        </p>
+    <main className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-b from-[#F7F3ED] to-[#F3EEE7]">
+      <div className="w-full max-w-md">
+        <div className="bg-white border border-gray-200 rounded-3xl p-8 shadow-sm">
+          {/* Header */}
+          <div className="mb-6">
+            <h2 className="text-2xl font-semibold text-gray-800">
+              {mode === "login" ? "Sign in to Evalio" : "Create your Evalio account"}
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              {mode === "login" ? "Continue your setup securely." : "It takes less than a minute."}
+            </p>
+          </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <label className="block">
-            <span className="text-sm text-gray-700">Email</span>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
-              placeholder="you@example.com"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm text-gray-700">Password</span>
-            <div className="relative mt-1">
-              <input
-                type={showPassword ? "text" : "password"}
-                required
-                minLength={8}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="w-full border rounded-md px-3 py-2 pr-10 text-sm"
-                placeholder="At least 8 characters"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((value) => !value)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+          {/* Success */}
+          {message ? (
+            <div className="mb-4 rounded-2xl p-3 flex items-center gap-2 border border-green-200 bg-green-50">
+              <CheckCircle2 size={18} className="text-green-700" />
+              <p className="text-sm text-green-700">{message}</p>
             </div>
-          </label>
+          ) : null}
 
-          {message ? <p className="text-sm text-green-700">{message}</p> : null}
-          {error ? <p className="text-sm text-red-700">{error}</p> : null}
+          {/* Error */}
+          {error ? (
+            <div className="mb-4 rounded-2xl p-3 flex items-center gap-2 border border-red-200 bg-red-50">
+              <AlertCircle size={18} className="text-red-700" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          ) : null}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-black text-white py-2 text-sm disabled:opacity-60"
-          >
-            {loading ? "Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
-          </button>
-        </form>
+          {/* Form */}
+          <form onSubmit={onSubmit} className="space-y-4">
+            <label className="block">
+              <span className="block text-sm mb-2 text-gray-800">Email</span>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+                className="w-full px-4 py-2.5 rounded-xl outline-none transition-all bg-[#FBFAF8] border border-[#E6E2DB] text-gray-800 focus:border-[#5D737E] focus:ring-4 focus:ring-[#DDE7EC]"
+                placeholder="you@example.com"
+              />
+            </label>
 
-        <div className="mt-4 flex items-center justify-between text-sm">
-          <button
-            type="button"
-            className="text-gray-700 underline"
-            onClick={() => setMode(mode === "login" ? "register" : "login")}
-          >
-            {mode === "login" ? "Need an account?" : "Already have an account?"}
-          </button>
-          <button
-            type="button"
-            className="text-gray-700 underline"
-            onClick={onUseExistingSession}
-            disabled={loading}
-          >
-            Use existing session
-          </button>
+            <label className="block">
+              <span className="block text-sm mb-2 text-gray-800">Password</span>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                  className="w-full px-4 py-2.5 pr-12 rounded-xl outline-none transition-all bg-[#FBFAF8] border border-[#E6E2DB] text-gray-800 focus:border-[#5D737E] focus:ring-4 focus:ring-[#DDE7EC]"
+                  placeholder="At least 8 characters"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  disabled={loading}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-gray-500 hover:opacity-70"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </label>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 text-white px-6 py-3 rounded-xl font-medium transition disabled:opacity-60 bg-[#5D737E] hover:bg-[#4A5D66] shadow-sm"
+            >
+              {loading ? <Loader2 size={18} className="animate-spin" /> : null}
+              {loading
+                ? "Please wait..."
+                : mode === "login"
+                  ? "Sign In"
+                  : "Create Account"}
+            </button>
+          </form>
+
+          {/* Mode toggle */}
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              onClick={toggleMode}
+              disabled={loading}
+              className="text-sm text-gray-500 hover:opacity-70"
+            >
+              {mode === "login" ? (
+                <>
+                  Need an account? <span className="text-[#5D737E]">Create one</span>
+                </>
+              ) : (
+                <>
+                  Already have an account?{" "}
+                  <span className="text-[#5D737E]">Sign in</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Existing session */}
+          <div className="mt-4 text-center pt-4 border-t border-[#E6E2DB]">
+            <button
+              type="button"
+              onClick={onUseExistingSession}
+              disabled={loading}
+              className="text-sm underline text-[#B8A89A] hover:opacity-70"
+            >
+              Use existing session
+            </button>
+          </div>
         </div>
       </div>
     </main>
