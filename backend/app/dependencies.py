@@ -6,11 +6,13 @@ from app.repositories.inmemory_course_repo import InMemoryCourseRepository
 from app.repositories.inmemory_user_repo import InMemoryUserRepository
 from app.services.auth_service import AuthService, AuthenticatedUser, AuthenticationError
 from app.services.course_service import CourseService
+from app.services.extraction_service import ExtractionService
 
 _course_repo = InMemoryCourseRepository()
 _user_repo = InMemoryUserRepository()
 _course_service = CourseService(_course_repo)
 _auth_service = AuthService(_user_repo)
+_extraction_service = ExtractionService()
 
 
 def get_course_repo() -> CourseRepository:
@@ -27,6 +29,10 @@ def get_course_service() -> CourseService:
 
 def get_auth_service() -> AuthService:
     return _auth_service
+
+
+def get_extraction_service() -> ExtractionService:
+    return _extraction_service
 
 
 def get_current_user(
