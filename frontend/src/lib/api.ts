@@ -9,6 +9,9 @@ export type CourseAssessment = {
   children?: CourseAssessment[] | null;
   rule_type?: string | null;
   rule_config?: Record<string, unknown> | null;
+  total_count?: number | null;
+  effective_count?: number | null;
+  unit_weight?: number | null;
   is_bonus?: boolean;
 };
 

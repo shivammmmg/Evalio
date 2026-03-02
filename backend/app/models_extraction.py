@@ -47,6 +47,7 @@ class ExtractionDiagnostics(BaseModel):
 
 
 class ExtractionResponse(BaseModel):
+    course_code: Optional[str] = None
     assessments: list[ExtractionAssessment] = Field(default_factory=list)
     deadlines: list[ExtractionDeadline] = Field(default_factory=list)
     diagnostics: ExtractionDiagnostics

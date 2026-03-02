@@ -16,6 +16,7 @@ type ExtractedAssessment = {
 };
 
 type ExtractionResponse = {
+  course_code?: string | null;
   structure_valid: boolean;
   assessments: ExtractedAssessment[];
   deadlines: Array<{

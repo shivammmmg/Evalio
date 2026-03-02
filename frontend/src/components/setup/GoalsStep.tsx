@@ -9,6 +9,56 @@ import { getApiErrorMessage } from "@/lib/errors";
 
 const TARGET_STORAGE_KEY = "evalio_target_grade";
 
+function getBestOfEffectiveCount(assessment: {
+  effective_count?: number | null;
+  rule_config?: Record<string, unknown> | null;
+  children?: Array<{ weight: number }> | null;
+}): number {
+  if (typeof assessment.effective_count === "number" && assessment.effective_count > 0) {
+    return Math.max(1, Math.floor(assessment.effective_count));
+  }
+
+  const config = assessment.rule_config ?? {};
+  const bestCountRaw =
+    typeof config.best_count === "number"
+      ? config.best_count
+      : typeof config.best === "number"
+      ? config.best
+      : null;
+
+  if (typeof bestCountRaw === "number" && bestCountRaw > 0) {
+    return Math.max(1, Math.floor(bestCountRaw));
+  }
+
+  return 1;
+}
+
+function getEffectiveWeight(assessment: {
+  weight: number;
+  rule_type?: string | null;
+  children?: Array<{ weight: number }> | null;
+  effective_count?: number | null;
+  rule_config?: Record<string, unknown> | null;
+}): number {
+  const parentWeight = Number.isFinite(assessment.weight) ? Math.max(0, assessment.weight) : 0;
+  if (assessment.rule_type !== "best_of") return parentWeight;
+
+  const children = Array.isArray(assessment.children) ? assessment.children : [];
+  if (!children.length) return parentWeight;
+
+  const effectiveCount = Math.min(getBestOfEffectiveCount(assessment), children.length);
+  if (effectiveCount <= 0) return parentWeight;
+
+  const topWeightSum = [...children]
+    .map((child) => (Number.isFinite(child.weight) ? Math.max(0, child.weight) : 0))
+    .sort((a, b) => b - a)
+    .slice(0, effectiveCount)
+    .reduce((sum, value) => sum + value, 0);
+
+  if (!Number.isFinite(topWeightSum) || topWeightSum <= 0) return parentWeight;
+  return Math.min(parentWeight, topWeightSum);
+}
+
 export function GoalsStep() {
   const router = useRouter();
   const [target, setTarget] = useState<number>(75);
@@ -71,11 +121,15 @@ export function GoalsStep() {
         }
         const graded = latest.assessments.filter(
           (a) =>
-            typeof a.raw_score === "number" && typeof a.total_score === "number"
+            !a.is_bonus &&
+            typeof a.raw_score === "number" &&
+            typeof a.total_score === "number" &&
+            a.total_score > 0
         );
-        const gradedW = graded.reduce((sum, a) => sum + a.weight, 0);
-        setGradedWeight(gradedW);
-        setRemainingWeight(100 - gradedW);
+        const gradedW = graded.reduce((sum, a) => sum + getEffectiveWeight(a), 0);
+        const clampedGraded = Math.max(0, Math.min(100, gradedW));
+        setGradedWeight(clampedGraded);
+        setRemainingWeight(Math.max(0, Math.min(100, 100 - clampedGraded)));
       } catch (e) {
         setError(getApiErrorMessage(e, "Failed to load goals."));
       }

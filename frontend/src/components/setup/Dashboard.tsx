@@ -48,6 +48,46 @@ function formatCompactNumber(value: number): string {
   return value.toFixed(2).replace(/\.?0+$/, "");
 }
 
+function getBestOfEffectiveCount(assessment: CourseAssessment): number {
+  if (typeof assessment.effective_count === "number" && assessment.effective_count > 0) {
+    return Math.max(1, Math.floor(assessment.effective_count));
+  }
+
+  const config = assessment.rule_config ?? {};
+  const bestCountRaw =
+    typeof config.best_count === "number"
+      ? config.best_count
+      : typeof config.best === "number"
+      ? config.best
+      : null;
+
+  if (typeof bestCountRaw === "number" && bestCountRaw > 0) {
+    return Math.max(1, Math.floor(bestCountRaw));
+  }
+
+  return 1;
+}
+
+function getEffectiveWeight(assessment: CourseAssessment): number {
+  const parentWeight = Number.isFinite(assessment.weight) ? Math.max(0, assessment.weight) : 0;
+  if (assessment.rule_type !== "best_of") return parentWeight;
+
+  const children = Array.isArray(assessment.children) ? assessment.children : [];
+  if (!children.length) return parentWeight;
+
+  const effectiveCount = Math.min(getBestOfEffectiveCount(assessment), children.length);
+  if (effectiveCount <= 0) return parentWeight;
+
+  const topWeightSum = [...children]
+    .map((child) => (Number.isFinite(child.weight) ? Math.max(0, child.weight) : 0))
+    .sort((a, b) => b - a)
+    .slice(0, effectiveCount)
+    .reduce((sum, value) => sum + value, 0);
+
+  if (!Number.isFinite(topWeightSum) || topWeightSum <= 0) return parentWeight;
+  return Math.min(parentWeight, topWeightSum);
+}
+
 export function Dashboard() {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -92,14 +132,15 @@ export function Dashboard() {
           return;
         }
 
-        const graded = latest.assessments.filter((a) => hasGrade(a));
-        const gradedW = graded.reduce((sum, a) => sum + a.weight, 0);
+        const graded = latest.assessments.filter((a) => !a.is_bonus && hasGrade(a));
+        const gradedW = graded.reduce((sum, a) => sum + getEffectiveWeight(a), 0);
         const contribution = graded.reduce((sum, assessment) => {
           const percent = getPercent(assessment);
           if (percent === null) return sum;
-          return sum + (percent * assessment.weight) / 100;
+          const effectiveWeight = getEffectiveWeight(assessment);
+          return sum + (percent * effectiveWeight) / 100;
         }, 0);
-        setGradedWeight(gradedW);
+        setGradedWeight(Math.min(100, Math.max(0, gradedW)));
         setCurrentContribution(contribution);
 
         const target = await checkTarget(resolvedCourseId, { target: resolvedTarget });
@@ -155,7 +196,7 @@ export function Dashboard() {
   const currentGrade = targetResult?.current_standing ?? 0;
   const requiredAverage = targetResult?.required_average_display ?? "0.0%";
   const workCompleted = `${gradedWeight.toFixed(0)}%`;
-  const remainingWeight = Math.max(0, 100 - gradedWeight);
+  const remainingWeight = Math.max(0, Math.min(100, 100 - gradedWeight));
   const targetFill = Math.max(0, Math.min(targetGrade, 100));
   const progressWidth = `${targetFill}%`;
   // Use interactive slider value for performance assumption
@@ -214,7 +255,7 @@ export function Dashboard() {
     {
       label: "Work Completed",
       value: workCompleted,
-      sub: `${Math.max(0, 100 - gradedWeight).toFixed(0)}% still to go`,
+      sub: `${remainingWeight.toFixed(0)}% still to go`,
     },
     { label: "Required Average", value: requiredAverage, sub: "To reach your target" },
   ];

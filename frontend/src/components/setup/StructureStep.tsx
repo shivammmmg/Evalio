@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ChevronDown } from "lucide-react";
 import { confirmExtraction } from "@/lib/api";
@@ -13,6 +13,8 @@ type ExtractedAssessment = {
   is_bonus?: boolean;
   rule?: string | null;
   rule_type?: string | null;
+  total_count?: number | null;
+  effective_count?: number | null;
   rule_config?: Record<string, unknown> | null;
   children?: ExtractedAssessment[];
 };
@@ -30,6 +32,14 @@ export function StructureStep() {
     () => (Array.isArray(extractionResult?.assessments) ? extractionResult.assessments : []),
     [extractionResult]
   );
+  const extractedCourseCode =
+    typeof extractionResult?.course_code === "string" ? extractionResult.course_code.trim() : "";
+
+  useEffect(() => {
+    if (!extractedCourseCode) return;
+    if (courseName.trim() && courseName.trim() !== "Untitled Course") return;
+    setCourseName(extractedCourseCode);
+  }, [extractedCourseCode, courseName]);
 
   const totalWeight = useMemo(
     () =>
@@ -99,16 +109,26 @@ export function StructureStep() {
     const children = Array.isArray(assessment.children) ? assessment.children : [];
     const hasChildren = children.length > 0;
     const expanded = !!expandedByKey[nodeKey];
-    const ruleLabel =
-      (typeof assessment.rule_type === "string" && assessment.rule_type) ||
-      (typeof assessment.rule === "string" && assessment.rule) ||
-      "";
+    const bestOfLabel = (() => {
+      if (assessment.rule_type !== "best_of") return null;
+      const effectiveCount = Number(assessment.effective_count);
+      const totalCount = Number(assessment.total_count);
+      if (
+        Number.isFinite(effectiveCount) &&
+        Number.isFinite(totalCount) &&
+        effectiveCount > 0 &&
+        totalCount > 0
+      ) {
+        return `Best ${effectiveCount} out of ${totalCount} count`;
+      }
+      return "Best-of grading applied";
+    })();
 
     return (
-      <div key={nodeKey} className="space-y-2">
+      <div key={nodeKey} className="space-y-3">
         <button
           type="button"
-          className="bg-[#F9F8F6] p-4 rounded-2xl border border-gray-100"
+          className="w-full bg-[#F9F8F6] px-6 py-5 rounded-2xl border border-gray-100 text-left"
           style={{ marginLeft: `${depth * 20}px` }}
           onClick={() => {
             if (!hasChildren) return;
@@ -119,28 +139,23 @@ export function StructureStep() {
             <div className="flex items-center gap-2">
               {hasChildren ? (
                 <ChevronDown
-                  size={16}
+                  size={18}
                   className={`text-gray-500 transition-transform ${expanded ? "rotate-180" : "rotate-0"}`}
                 />
               ) : null}
-              <p className="text-sm text-gray-800 font-medium">{assessment.name}</p>
+              <p className="text-base text-gray-800 font-semibold">{assessment.name}</p>
             </div>
-            <p className="text-sm text-gray-600">{assessment.weight}%</p>
+            <p className="text-base font-medium text-gray-700">{assessment.weight}%</p>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
             {assessment.is_bonus ? (
               <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">
                 Bonus
               </span>
             ) : null}
-            {ruleLabel ? (
+            {bestOfLabel ? (
               <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
-                Rule: {ruleLabel}
-              </span>
-            ) : null}
-            {hasChildren ? (
-              <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
-                {expanded ? "Collapse" : "Expand"}
+                {bestOfLabel}
               </span>
             ) : null}
           </div>
@@ -180,7 +195,7 @@ export function StructureStep() {
       <div className="mt-8 bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Course name</label>
+            <label className="block text-xs text-gray-500 mb-1">Course Name</label>
             <input
               type="text"
               value={courseName}

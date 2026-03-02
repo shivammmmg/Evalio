@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from collections import Counter
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -158,11 +159,90 @@ LEADING_COUNT_REGEX = re.compile(r"^(\d+)\s+(.*)")
 DROP_LOWEST_RULE_REGEX = re.compile(r"\bdrop\s+lowest(?:\s+(\d+))?\b", re.IGNORECASE)
 DROP_LOWEST_ALT_RULE_REGEX = re.compile(r"\bdrop\s+(\d+)\s+lowest\b", re.IGNORECASE)
 TOTAL_COUNT_REGEX = re.compile(r"\b(?:out\s+of|of)\s+(\d+)\b", re.IGNORECASE)
+COURSE_CODE_REGEX = re.compile(r"\b[A-Z]{2,6}\s?-?\s?\d{3,4}[A-Z]?\b")
+COURSE_CODE_ALT_REGEX = re.compile(r"\b[A-Z]{2,6}\s?-?\s?\d[A-Z]\d{2}\b")
+PHONE_NUMBER_REGEX = re.compile(
+    r"\b(?:\+?\d{1,2}[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b"
+)
+COURSE_CODE_BLOCK_TOKENS = ("ROOM", "PAGE", "DATE", "TIME", "OFFICE", "INSTRUCTOR")
 
 MAX_TEXT_CHARS = 120000
 MAX_SCAN_LINES = 2000
 MAX_OCR_PAGES = 10
 PDF_SUSPICIOUS_TEXT_THRESHOLD = 400
+
+
+def _is_mostly_uppercase(line: str) -> bool:
+    letters = [char for char in line if char.isalpha()]
+    if not letters:
+        return False
+    uppercase_count = sum(1 for char in letters if char.isupper())
+    return (uppercase_count / len(letters)) >= 0.6
+
+
+def _normalize_course_code(candidate: str) -> str:
+    normalized = re.sub(r"\s+", " ", candidate.strip())
+    return re.sub(r"\s*-\s*", "-", normalized)
+
+
+def extract_course_code(full_text: str) -> str | None:
+    lines = full_text.splitlines()[:80]
+    best_candidate: str | None = None
+    best_score = -1
+
+    for index, raw_line in enumerate(lines):
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        upper_line = line.upper()
+        lower_line = line.lower()
+        if any(token in upper_line for token in COURSE_CODE_BLOCK_TOKENS):
+            continue
+        if "@" in line or "http" in lower_line:
+            continue
+        if PHONE_NUMBER_REGEX.search(line):
+            continue
+
+        matches = [*COURSE_CODE_REGEX.findall(line), *COURSE_CODE_ALT_REGEX.findall(line)]
+        if not matches:
+            continue
+
+        for match in matches:
+            score = 0
+            if index < 30:
+                score += 2
+            if "course" in lower_line:
+                score += 1
+            if len(line) < 120:
+                score += 1
+            if _is_mostly_uppercase(line):
+                score += 1
+
+            if score > best_score:
+                best_score = score
+                best_candidate = _normalize_course_code(match)
+
+    return best_candidate
+
+
+def get_child_base_label(parent_name: str) -> str:
+    name = parent_name.lower()
+
+    if "quiz" in name:
+        return "Quiz"
+    if "lab" in name:
+        return "Lab"
+    if "assignment" in name:
+        return "Assignment"
+    if "test" in name:
+        return "Test"
+    if "exam" in name:
+        return "Exam"
+
+    return "Item"
+
+
 def _read_field(raw_item: Any, field_name: str, default: Any = None) -> Any:
     if isinstance(raw_item, dict):
         return raw_item.get(field_name, default)
@@ -389,7 +469,26 @@ class ExtractionService:
                 text_result=text_result,
                 failure_reason="No text could be extracted from the file",
                 trigger_reasons=["no_extracted_text"],
+                course_code=None,
             )
+        course_code_executor = ThreadPoolExecutor(max_workers=1)
+        course_code_future: Future[str | None] = course_code_executor.submit(
+            extract_course_code,
+            full_text,
+        )
+        resolved_course_code: dict[str, str | None] = {"value": None, "done": False}
+
+        def _resolve_course_code() -> str | None:
+            if resolved_course_code["done"]:
+                return resolved_course_code["value"]
+            try:
+                resolved_course_code["value"] = course_code_future.result()
+            except Exception:
+                resolved_course_code["value"] = None
+            finally:
+                resolved_course_code["done"] = True
+                course_code_executor.shutdown(wait=False)
+            return resolved_course_code["value"]
         llm_input_text, filtered_used = self._grading_filter.filter(full_text)
         print("FILTERED_TEXT_LEN:", len(llm_input_text))
         print("FILTERED_TEXT_APPROX_TOKENS:", len(llm_input_text) / 4)
@@ -414,6 +513,7 @@ class ExtractionService:
                 trigger_reasons=[exc.reason_code],
                 extra_warnings=[filtered_warning],
                 method="llm",
+                course_code=_resolve_course_code(),
             )
         except Exception as exc:  # pragma: no cover - defensive fallback
             end_total = time.perf_counter()
@@ -426,6 +526,7 @@ class ExtractionService:
                 trigger_reasons=["llm_unexpected_failure"],
                 extra_warnings=[filtered_warning],
                 method="llm",
+                course_code=_resolve_course_code(),
             )
 
         try:
@@ -447,6 +548,7 @@ class ExtractionService:
                 trigger_reasons=["llm_invalid_schema"],
                 extra_warnings=[filtered_warning],
                 method="llm",
+                course_code=_resolve_course_code(),
             )
 
         validation_result = self._validate_structure(
@@ -504,7 +606,10 @@ class ExtractionService:
                     f"[FINAL_EXTRACTION_RESULT] assessments={len(normalized['assessments'])} "
                     f"deadlines={len(normalized['deadlines'])} structure_valid=False"
                 )
-            return self._build_validation_failure_response(diagnostics=diagnostics)
+            return self._build_validation_failure_response(
+                diagnostics=diagnostics,
+                course_code=_resolve_course_code(),
+            )
 
         end_total = time.perf_counter()
         print("TOTAL_EXTRACTION_SECONDS:", round(end_total - start_total, 3))
@@ -514,6 +619,7 @@ class ExtractionService:
                 f"deadlines={len(normalized['deadlines'])} structure_valid=True"
             )
         return ExtractionResponse(
+            course_code=_resolve_course_code(),
             assessments=normalized["assessments"],
             deadlines=normalized["deadlines"],
             diagnostics=diagnostics,
@@ -892,11 +998,11 @@ class ExtractionService:
 
             total_count = int(total_count_decimal)
             normalized_unit_weight = float(parent_weight_decimal / divisor)
-            base_name = assessment.name[:-1] if assessment.name.endswith("s") else assessment.name
+            base_label = get_child_base_label(assessment.name)
 
             synthesized_children = [
                 ExtractionAssessment(
-                    name=f"{base_name} {child_index}",
+                    name=f"{base_label} {child_index}",
                     weight=normalized_unit_weight,
                     is_bonus=False,
                     children=[],
@@ -981,6 +1087,7 @@ class ExtractionService:
         trigger_reasons: list[str],
         extra_warnings: list[str] | None = None,
         method: str = "deterministic",
+        course_code: str | None = None,
     ) -> ExtractionResponse:
         parse_warnings = self._merge_parse_warnings(
             text_result.get("parse_warnings", []),
@@ -1000,7 +1107,10 @@ class ExtractionService:
             trigger_reasons=trigger_reasons,
             stub=False,
         )
-        return self._build_validation_failure_response(diagnostics=diagnostics)
+        return self._build_validation_failure_response(
+            diagnostics=diagnostics,
+            course_code=course_code,
+        )
 
     def _extract_text(self, *, filename: str, content_type: str, file_bytes: bytes) -> dict[str, Any]:
         lowered_name = filename.lower()
@@ -2071,8 +2181,10 @@ class ExtractionService:
         self,
         *,
         diagnostics: ExtractionDiagnostics,
+        course_code: str | None = None,
     ) -> ExtractionResponse:
         return ExtractionResponse(
+            course_code=course_code,
             assessments=[],
             deadlines=[],
             diagnostics=diagnostics,
