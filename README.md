@@ -198,11 +198,10 @@ Backend tests:
 ```bash
 cd backend
 source venv/bin/activate
-pip install pytest
 python -m pytest -q
 ```
 
-Note: `pytest` is used by `backend/test/*` but is not pinned in `backend/requirements.txt`.
+`pytest` is included in `backend/requirements.txt`.
 
 ## Known Limitations
 

@@ -29,7 +29,15 @@ AUTH_ACCESS_TOKEN_EXPIRE_MINUTES=480
 AUTH_COOKIE_NAME=evalio_access_token
 AUTH_COOKIE_SECURE=false
 FRONTEND_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+OPENAI_API_KEY=your-openai-key
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_TIMEOUT_SECONDS=20
 ```
+
+OCR prerequisites (system packages, not pip):
+
+- `tesseract`
+- `pdftoppm` (Poppler)
 
 ## API Endpoints
 
