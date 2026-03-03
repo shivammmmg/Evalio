@@ -58,7 +58,7 @@ project-group-11-evalio/
 
 - Node.js 18+ (20+ recommended)
 - npm
-- Python 3.10+
+- Python 3.12.12
 - `tesseract` (system package)
 - `pdftoppm` from Poppler (system package)
 
@@ -80,6 +80,7 @@ This script will:
 - Copy missing env files (`backend/.env`, `frontend/.env.local`)
 - Create backend virtual environment (`backend/.venv`) if needed
 - Install backend and frontend dependencies
+- Verify required backend versions (`openai==1.46.0`, `httpx==0.27.2`)
 - Print the exact backend/frontend run commands
 
 ### 3. Run Backend (FastAPI)
