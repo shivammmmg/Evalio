@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Target, TrendingUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Target, TrendingUp } from "lucide-react";
 import { checkTarget, listCourses } from "@/lib/api";
 import { useSetupCourse } from "@/app/setup/course-context";
 import { getApiErrorMessage } from "@/lib/errors";
@@ -61,8 +61,10 @@ function getEffectiveWeight(assessment: {
 
 export function GoalsStep() {
   const router = useRouter();
+
   const [target, setTarget] = useState<number>(75);
   const [isTargetLoaded, setIsTargetLoaded] = useState(false);
+
   const [currentStanding, setCurrentStanding] = useState(85.0);
   const [explanation, setExplanation] = useState(
     "This target looks realistic based on your current performance and remaining weight."
@@ -72,15 +74,19 @@ export function GoalsStep() {
     grade_point: 8,
     description: "Excellent",
   });
+
   const [gradedWeight, setGradedWeight] = useState<number>(30);
   const [remainingWeight, setRemainingWeight] = useState<number>(70);
+
   const [requiredAverage, setRequiredAverage] = useState(0);
   const [requiredAverageDisplay, setRequiredAverageDisplay] = useState("0.0%");
-  const [requiredFractionDisplay, setRequiredFractionDisplay] = useState(
-    "(0.00 / 0 remaining weight)"
-  );
+  const [requiredFractionDisplay, setRequiredFractionDisplay] = useState("(0.00 / 0 remaining weight)");
   const [classification, setClassification] = useState("Comfortable");
   const [error, setError] = useState("");
+
+  // NEW: accordion state
+  const [isEvaluationExpanded, setIsEvaluationExpanded] = useState(false);
+
   const { courseId, ensureCourseIdFromList } = useSetupCourse();
 
   useEffect(() => {
@@ -119,6 +125,7 @@ export function GoalsStep() {
           setError("No course found. Complete structure first.");
           return;
         }
+
         const graded = latest.assessments.filter(
           (a) =>
             !a.is_bonus &&
@@ -126,6 +133,7 @@ export function GoalsStep() {
             typeof a.total_score === "number" &&
             a.total_score > 0
         );
+
         const gradedW = graded.reduce((sum, a) => sum + getEffectiveWeight(a), 0);
         const clampedGraded = Math.max(0, Math.min(100, gradedW));
         setGradedWeight(clampedGraded);
@@ -140,34 +148,35 @@ export function GoalsStep() {
 
   useEffect(() => {
     if (!courseId) return;
+
     const run = async () => {
       try {
         const response = (await checkTarget(courseId, { target })) as {
           current_standing: number;
           explanation: string;
-          york_equivalent: {
-            letter: string;
-            grade_point: number;
-            description: string;
-          };
+          york_equivalent: { letter: string; grade_point: number; description: string };
           required_points: number;
           required_average: number;
           required_average_display: string;
           required_fraction_display: string;
           classification: string;
         };
+
         setCurrentStanding(response.current_standing);
         setExplanation(response.explanation);
         setYorkEquivalent(response.york_equivalent);
+
         setRequiredAverage(response.required_average);
         setRequiredAverageDisplay(response.required_average_display);
         setRequiredFractionDisplay(response.required_fraction_display);
         setClassification(response.classification);
+
         setError("");
       } catch (e) {
         setError(getApiErrorMessage(e, "Failed to evaluate target."));
       }
     };
+
     run();
   }, [target, courseId]);
 
@@ -217,6 +226,23 @@ export function GoalsStep() {
 
   const StatusIcon = statusUI.icon;
 
+  // NEW: values used in Evaluation Breakdown
+  const earnedSoFar = useMemo(() => {
+    const earned = (Number(currentStanding) * Number(gradedWeight)) / 100;
+    return Number.isFinite(earned) ? earned : 0;
+  }, [currentStanding, gradedWeight]);
+
+  const formulaText = useMemo(() => {
+    const t = Number.isFinite(target) ? target : 0;
+    const earned = Number.isFinite(earnedSoFar) ? earnedSoFar : 0;
+    const rem = Number.isFinite(remainingWeight) ? remainingWeight : 0;
+
+    if (rem <= 0) return "No remaining weight — required average is not applicable.";
+
+    const req = Number.isFinite(requiredAverage) ? requiredAverage : 0;
+    return `(${t.toFixed(1)} − ${earned.toFixed(1)}) ÷ ${rem.toFixed(1)} = ${req.toFixed(1)}%`;
+  }, [target, earnedSoFar, remainingWeight, requiredAverage]);
+
   return (
     <div className="max-w-4xl mx-auto px-4 pb-20">
       <h2 className="text-3xl font-bold text-gray-800">Set Your Target</h2>
@@ -233,7 +259,6 @@ export function GoalsStep() {
 
         <div className="max-w-xl">
           <div className="flex items-center gap-6 mb-4">
-            {/* Slider */}
             <div className="flex-1">
               <input
                 type="range"
@@ -250,11 +275,8 @@ export function GoalsStep() {
               />
             </div>
 
-            {/* % Display */}
             <div className="w-28 text-right">
-              <div className="text-4xl font-semibold text-[#5D737E]">
-                {target}%
-              </div>
+              <div className="text-4xl font-semibold text-[#5D737E]">{target}%</div>
             </div>
           </div>
 
@@ -278,9 +300,7 @@ export function GoalsStep() {
         <div className="space-y-6">
           {/* Header row */}
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-500">
-              Required average on remaining work
-            </span>
+            <span className="text-sm text-gray-500">Required average on remaining work</span>
 
             <div
               className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${statusUI.pillBg} ${statusUI.pillText}`}
@@ -295,8 +315,69 @@ export function GoalsStep() {
             <div className={`text-6xl font-semibold ${statusUI.pillText}`}>
               {requiredAverageDisplay}
             </div>
-            <div className="mt-2 text-sm text-gray-500">
-              {requiredFractionDisplay}
+            <div className="mt-2 text-sm text-gray-500">{requiredFractionDisplay}</div>
+          </div>
+
+          {/* NEW: Evaluation Breakdown (Collapsible) */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setIsEvaluationExpanded((v) => !v)}
+              className="w-full flex items-center justify-between rounded-2xl px-5 py-4 bg-[#F6F1EA] border border-gray-100 hover:border-gray-200 transition"
+            >
+              <span className="text-base font-semibold text-gray-700">Evaluation Breakdown</span>
+              {isEvaluationExpanded ? (
+                <ChevronUp className="text-gray-500" size={20} />
+              ) : (
+                <ChevronDown className="text-gray-500" size={20} />
+              )}
+            </button>
+
+            <div
+              className={`overflow-hidden transition-[max-height,opacity] duration-200 ease-out ${
+                isEvaluationExpanded ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0"
+              }`}
+            >
+              <div className="mt-4 rounded-2xl bg-[#F6F1EA] border border-gray-100 p-5">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white border border-gray-100">
+                    <span className="text-sm text-gray-500">Target percentage</span>
+                    <span className="text-sm font-semibold text-gray-800">{target.toFixed(1)}%</span>
+                  </div>
+
+                  <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white border border-gray-100">
+                    <span className="text-sm text-gray-500">Earned so far</span>
+                    <span className="text-sm font-semibold text-green-700">
+                      {earnedSoFar.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white border border-gray-100">
+                    <span className="text-sm text-gray-500">Remaining weight</span>
+                    <span className="text-sm font-semibold text-[#5D737E]">
+                      {Number.isFinite(remainingWeight) ? remainingWeight.toFixed(1) : "0.0"}%
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white border border-gray-100">
+                    <span className="text-sm text-gray-500">Required remaining average</span>
+                    <span className={`text-sm font-semibold ${statusUI.pillText}`}>
+                      {Number.isFinite(requiredAverage) ? requiredAverage.toFixed(1) : "0.0"}%
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-[#E6E2DB]">
+                  <div className="text-xs font-semibold text-[#C6B8A8] mb-2">Formula</div>
+                  <div className="px-4 py-3 rounded-2xl bg-white border border-gray-100 text-sm text-gray-500">
+                    {formulaText}
+                  </div>
+
+                  <p className="mt-3 text-xs text-gray-500">
+                    This evaluation is deterministic and does not modify stored grade data.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -316,9 +397,7 @@ export function GoalsStep() {
           </div>
 
           {/* Message box */}
-          <div
-            className={`rounded-2xl p-4 border ${statusUI.noteBg} ${statusUI.noteBorder}`}
-          >
+          <div className={`rounded-2xl p-4 border ${statusUI.noteBg} ${statusUI.noteBorder}`}>
             <p className={`text-sm ${statusUI.noteText}`}>{explanation}</p>
           </div>
 
@@ -334,22 +413,20 @@ export function GoalsStep() {
 
             <div className="rounded-2xl p-5 bg-[#F6F1EA] border border-gray-100">
               <div className="text-sm text-gray-500">Remaining Weight</div>
-              <div className="mt-1 text-2xl font-semibold text-[#5D737E]">
-                {remainingWeight}%
-              </div>
+              <div className="mt-1 text-2xl font-semibold text-[#5D737E]">{remainingWeight}%</div>
               <div className="mt-1 text-xs text-[#C6B8A8]">Still ahead</div>
             </div>
           </div>
         </div>
       </div>
+
       {error ? <p className="mt-4 text-sm text-red-500">{error}</p> : null}
 
-      {/* Primary action */}
       <button
-        onClick={() => router.push("/setup/dashboard")}
+        onClick={() => router.push("/setup/deadlines")}
         className="mt-8 w-full bg-[#5D737E] text-white py-4 rounded-xl font-semibold shadow-lg hover:bg-[#4A5D66] transition"
       >
-        Continue to Planning
+        Continue to Deadlines
       </button>
     </div>
   );

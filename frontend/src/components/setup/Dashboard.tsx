@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, TrendingUp, GraduationCap } from "lucide-react";
+import { AlertTriangle, TrendingUp, GraduationCap, Calendar, Plus } from "lucide-react";
 import { useSetupCourse } from "@/app/setup/course-context";
 import { getApiErrorMessage } from "@/lib/errors";
 import {
@@ -16,6 +16,7 @@ import {
 
 const DEFAULT_TARGET_GRADE = 85;
 const TARGET_STORAGE_KEY = "evalio_target_grade";
+const CONFIRMED_DEADLINES_KEY = "evalio_deadlines_confirmed_v1";
 
 type AssessmentRow = {
   name: string;
@@ -24,6 +25,14 @@ type AssessmentRow = {
   neededLabel: string;
   needed: string;
   contrib: string;
+};
+
+type DashboardDeadline = {
+  id: string;
+  course_id: string;
+  title: string;
+  due_date: string;
+  due_time?: string;
 };
 
 // --- Helper Components ---
@@ -58,6 +67,23 @@ function formatCompactNumber(value: number): string {
   if (!Number.isFinite(value)) return "0";
   if (Number.isInteger(value)) return String(value);
   return value.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function safeParse<T>(raw: string | null): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function getDaysLeft(isoDate: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(isoDate);
+  due.setHours(0, 0, 0, 0);
+  return Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function getBestOfEffectiveCount(assessment: CourseAssessment): number {
@@ -117,6 +143,8 @@ export function Dashboard() {
   const [currentContribution, setCurrentContribution] = useState(0);
   const [targetGrade, setTargetGrade] = useState(DEFAULT_TARGET_GRADE);
   const [assumedPerformance, setAssumedPerformance] = useState(75);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [deadlines, setDeadlines] = useState<DashboardDeadline[]>([]);
   const { ensureCourseIdFromList } = useSetupCourse();
 
   useEffect(() => {
@@ -135,6 +163,7 @@ export function Dashboard() {
         setTargetGrade(resolvedTarget);
 
         const courses = await listCourses();
+        setCourses(courses);
         const resolvedCourseId = ensureCourseIdFromList(courses);
         if (!resolvedCourseId) {
           setError("No course found. Complete setup first.");
@@ -156,6 +185,19 @@ export function Dashboard() {
         const graded = latest.assessments.filter(
           (a) => !a.is_bonus && hasGrade(a)
         );
+
+        const confirmedMap = safeParse<Record<string, DashboardDeadline[]>>(
+          window.localStorage.getItem(CONFIRMED_DEADLINES_KEY)
+        ) ?? {};
+        const allDeadlines = Object.entries(confirmedMap).flatMap(
+          ([storedCourseId, courseDeadlines]) =>
+            (courseDeadlines ?? []).map((deadline) => ({
+              ...deadline,
+              course_id: deadline.course_id || storedCourseId,
+            }))
+        );
+        setDeadlines(allDeadlines);
+
         const gradedW = graded.reduce(
           (sum, a) => sum + getEffectiveWeight(a),
           0
@@ -305,6 +347,23 @@ export function Dashboard() {
     },
   ];
 
+  const upcomingDeadlines = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    return deadlines
+      .filter((deadline) => {
+        const dueDate = new Date(deadline.due_date);
+        dueDate.setHours(0, 0, 0, 0);
+        return dueDate >= now;
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+      )
+      .slice(0, 3);
+  }, [deadlines]);
+
   return (
     <div className="mx-auto max-w-4xl space-y-10 px-4 pb-20">
       {/* 1. Header Section */}
@@ -336,7 +395,84 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* 3. Target Card */}
+      {/* 3. Upcoming Deadlines */}
+      <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-xl font-bold text-gray-800">Upcoming Deadlines</h3>
+          <button
+            onClick={() => router.push("/setup/deadlines")}
+            className="rounded-lg bg-[#F6F1EA] px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:opacity-80"
+          >
+            Manage
+          </button>
+        </div>
+
+        {upcomingDeadlines.length === 0 ? (
+          <div className="rounded-2xl bg-[#F9F8F6] py-14 text-center">
+            <Calendar className="mx-auto mb-3 h-10 w-10 text-[#C6B8A8]" />
+            <p className="mb-3 text-sm text-gray-500">No upcoming deadlines yet</p>
+            <button
+              onClick={() => router.push("/setup/deadlines")}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#5D737E] px-4 py-2 text-sm text-white transition hover:bg-[#4A5D66]"
+            >
+              <Plus size={14} />
+              Add Deadline
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {upcomingDeadlines.map((deadline) => {
+              const dueDate = new Date(deadline.due_date);
+              const daysLeft = getDaysLeft(deadline.due_date);
+              const courseName =
+                courses.find((course) => course.course_id === deadline.course_id)
+                  ?.course_name || "Unknown Course";
+
+              return (
+                <div
+                  key={deadline.id}
+                  className="flex items-center gap-3 rounded-lg border border-[#E6E2DB] bg-[#F6F1EA] p-3"
+                >
+                  <div className="flex-1">
+                    <div className="mb-0.5 text-sm font-semibold text-gray-800">
+                      {deadline.title}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span>{courseName}</span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
+                        <Calendar size={10} />
+                        {dueDate.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                        {deadline.due_time ? `, ${deadline.due_time}` : ""}
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className={`text-sm font-semibold ${
+                      daysLeft <= 3
+                        ? "text-red-600"
+                        : daysLeft <= 7
+                        ? "text-[#C8833F]"
+                        : "text-green-700"
+                    }`}
+                  >
+                    {daysLeft === 0
+                      ? "Today"
+                      : daysLeft === 1
+                      ? "Tomorrow"
+                      : `${daysLeft} days`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 4. Target Card */}
       <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
         <div className="mb-6 flex justify-between items-center">
           <h3 className="font-bold text-gray-800">Target: {targetGrade}%</h3>
@@ -359,7 +495,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* 4. Performance Assumption */}
+      {/* 5. Performance Assumption */}
       <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
         <h3 className="mb-2 font-bold text-gray-800">Performance Assumption</h3>
         <p className="mb-6 text-xs text-gray-400">
@@ -405,7 +541,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* 5. Breakdown List */}
+      {/* 6. Breakdown List */}
       <div className="space-y-4">
         <h3 className="font-bold text-gray-800">Assessment Breakdown</h3>
         {(loading ? [] : assessments).map((a) => (

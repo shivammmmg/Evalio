@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Check } from "lucide-react";
 import { SetupCourseProvider } from "@/app/setup/course-context";
 import { getMe } from "@/lib/api";
 
@@ -49,7 +50,8 @@ export default function SetupLayout({
     if (pathname.startsWith("/setup/structure")) return 2;
     if (pathname.startsWith("/setup/grades")) return 3;
     if (pathname.startsWith("/setup/goals")) return 4;
-    if (pathname.startsWith("/setup/dashboard")) return 5;
+    if (pathname.startsWith("/setup/deadlines")) return 5;
+    if (pathname.startsWith("/setup/dashboard")) return 6;
     return 1;
   })();
 
@@ -58,7 +60,15 @@ export default function SetupLayout({
     2: "/setup/structure",
     3: "/setup/grades",
     4: "/setup/goals",
-    5: "/setup/dashboard",
+    5: "/setup/deadlines",
+    6: "/setup/dashboard",
+  };
+
+  const renderStepCircle = (step: number) => {
+    if (activeStep > step) {
+      return <Check size={12} />;
+    }
+    return step;
   };
 
   return (
@@ -93,55 +103,65 @@ export default function SetupLayout({
           </div>
         </div>
 
-        {/* UPDATED 5-STEP PROGRESS BAR */}
+        {/* UPDATED 6-STEP PROGRESS BAR */}
         {showStepProgress ? (
-          <div className="flex justify-between items-center max-w-4xl mx-auto mb-12 text-sm text-gray-400">
+          <div className="flex justify-between items-center max-w-6xl mx-auto mb-12 text-sm text-gray-400">
             <div
               onClick={() => router.push(stepRoutes[1])}
-              className={activeStep === 1 ? "flex items-center gap-2 text-slate-600 font-semibold" : "flex items-center gap-2"}
+              className={activeStep >= 1 ? "flex items-center gap-2 text-slate-600 font-semibold cursor-pointer" : "flex items-center gap-2 cursor-pointer"}
             >
-              <span className={activeStep === 1 ? "bg-slate-600 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs" : "bg-gray-200 text-gray-500 w-6 h-6 flex items-center justify-center rounded-full text-xs"}>
-                1
+              <span className={activeStep >= 1 ? "bg-slate-600 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs" : "bg-gray-200 text-gray-500 w-6 h-6 flex items-center justify-center rounded-full text-xs"}>
+                {renderStepCircle(1)}
               </span>
               Upload
             </div>
             <div className="h-[1px] bg-gray-200 flex-1 mx-4" />
             <div
               onClick={() => router.push(stepRoutes[2])}
-              className={activeStep === 2 ? "flex items-center gap-2 text-slate-600 font-semibold" : "flex items-center gap-2"}
+              className={activeStep >= 2 ? "flex items-center gap-2 text-slate-600 font-semibold cursor-pointer" : "flex items-center gap-2 cursor-pointer"}
             >
-              <span className={activeStep === 2 ? "bg-slate-600 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs" : "bg-gray-200 text-gray-500 w-6 h-6 flex items-center justify-center rounded-full text-xs"}>
-                2
+              <span className={activeStep >= 2 ? "bg-slate-600 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs" : "bg-gray-200 text-gray-500 w-6 h-6 flex items-center justify-center rounded-full text-xs"}>
+                {renderStepCircle(2)}
               </span>{" "}
               Structure
             </div>
             <div className="h-[1px] bg-gray-200 flex-1 mx-4" />
             <div
               onClick={() => router.push(stepRoutes[3])}
-              className={activeStep === 3 ? "flex items-center gap-2 text-slate-600 font-semibold" : "flex items-center gap-2"}
+              className={activeStep >= 3 ? "flex items-center gap-2 text-slate-600 font-semibold cursor-pointer" : "flex items-center gap-2 cursor-pointer"}
             >
-              <span className={activeStep === 3 ? "bg-slate-600 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs" : "bg-gray-200 text-gray-500 w-6 h-6 flex items-center justify-center rounded-full text-xs"}>
-                3
+              <span className={activeStep >= 3 ? "bg-slate-600 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs" : "bg-gray-200 text-gray-500 w-6 h-6 flex items-center justify-center rounded-full text-xs"}>
+                {renderStepCircle(3)}
               </span>{" "}
               Grades
             </div>
             <div className="h-[1px] bg-gray-200 flex-1 mx-4" />
             <div
               onClick={() => router.push(stepRoutes[4])}
-              className={activeStep === 4 ? "flex items-center gap-2 text-slate-600 font-semibold" : "flex items-center gap-2"}
+              className={activeStep >= 4 ? "flex items-center gap-2 text-slate-600 font-semibold cursor-pointer" : "flex items-center gap-2 cursor-pointer"}
             >
-              <span className={activeStep === 4 ? "bg-slate-600 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs" : "bg-gray-200 text-gray-500 w-6 h-6 flex items-center justify-center rounded-full text-xs"}>
-                4
+              <span className={activeStep >= 4 ? "bg-slate-600 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs" : "bg-gray-200 text-gray-500 w-6 h-6 flex items-center justify-center rounded-full text-xs"}>
+                {renderStepCircle(4)}
               </span>{" "}
               Goals
             </div>
             <div className="h-[1px] bg-gray-200 flex-1 mx-4" />
             <div
               onClick={() => router.push(stepRoutes[5])}
-              className={activeStep === 5 ? "flex items-center gap-2 text-slate-600 font-semibold" : "flex items-center gap-2"}
+              className={activeStep >= 5 ? "flex items-center gap-2 text-slate-600 font-semibold cursor-pointer" : "flex items-center gap-2 cursor-pointer"}
             >
-              <span className={activeStep === 5 ? "bg-slate-600 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs" : "bg-gray-200 text-gray-500 w-6 h-6 flex items-center justify-center rounded-full text-xs"}>
-                5
+              <span className={activeStep >= 5 ? "bg-slate-600 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs" : "bg-gray-200 text-gray-500 w-6 h-6 flex items-center justify-center rounded-full text-xs"}>
+                {renderStepCircle(5)}
+              </span>{" "}
+              Deadlines
+            </div>
+            <div className="h-[1px] bg-gray-200 flex-1 mx-4" />
+            <div
+              onClick={() => router.push(stepRoutes[6])}
+              className={activeStep >= 6 ? "flex items-center gap-2 text-slate-600 font-semibold cursor-pointer" : "flex items-center gap-2 cursor-pointer"}
+            >
+              <span className={activeStep >= 6 ? "bg-slate-600 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs" : "bg-gray-200 text-gray-500 w-6 h-6 flex items-center justify-center rounded-full text-xs"}>
+                {renderStepCircle(6)}
               </span>{" "}
               Dashboard
             </div>
