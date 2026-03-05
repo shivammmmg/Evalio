@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, TrendingUp } from "lucide-react";
+import { AlertTriangle, TrendingUp, GraduationCap } from "lucide-react";
 import { useSetupCourse } from "@/app/setup/course-context";
 import { getApiErrorMessage } from "@/lib/errors";
 import {
@@ -26,6 +26,17 @@ type AssessmentRow = {
   contrib: string;
 };
 
+// --- Helper Components ---
+function StatItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="text-center">
+      <p className="text-[9px] uppercase text-gray-400">{label}</p>
+      <p className="text-sm font-bold text-gray-700">{value}</p>
+    </div>
+  );
+}
+
+// --- Logic Helpers ---
 function hasGrade(assessment: CourseAssessment): boolean {
   return (
     typeof assessment.raw_score === "number" &&
@@ -36,7 +47,8 @@ function hasGrade(assessment: CourseAssessment): boolean {
 
 function getPercent(assessment: CourseAssessment): number | null {
   if (!hasGrade(assessment)) return null;
-  const percent = ((assessment.raw_score as number) / (assessment.total_score as number)) *
+  const percent =
+    ((assessment.raw_score as number) / (assessment.total_score as number)) *
     100;
   if (!Number.isFinite(percent)) return null;
   return Math.max(0, Math.min(percent, 100));
@@ -49,10 +61,12 @@ function formatCompactNumber(value: number): string {
 }
 
 function getBestOfEffectiveCount(assessment: CourseAssessment): number {
-  if (typeof assessment.effective_count === "number" && assessment.effective_count > 0) {
+  if (
+    typeof assessment.effective_count === "number" &&
+    assessment.effective_count > 0
+  ) {
     return Math.max(1, Math.floor(assessment.effective_count));
   }
-
   const config = assessment.rule_config ?? {};
   const bestCountRaw =
     typeof config.best_count === "number"
@@ -60,30 +74,33 @@ function getBestOfEffectiveCount(assessment: CourseAssessment): number {
       : typeof config.best === "number"
       ? config.best
       : null;
-
   if (typeof bestCountRaw === "number" && bestCountRaw > 0) {
     return Math.max(1, Math.floor(bestCountRaw));
   }
-
   return 1;
 }
 
 function getEffectiveWeight(assessment: CourseAssessment): number {
-  const parentWeight = Number.isFinite(assessment.weight) ? Math.max(0, assessment.weight) : 0;
+  const parentWeight = Number.isFinite(assessment.weight)
+    ? Math.max(0, assessment.weight)
+    : 0;
   if (assessment.rule_type !== "best_of") return parentWeight;
-
-  const children = Array.isArray(assessment.children) ? assessment.children : [];
+  const children = Array.isArray(assessment.children)
+    ? assessment.children
+    : [];
   if (!children.length) return parentWeight;
-
-  const effectiveCount = Math.min(getBestOfEffectiveCount(assessment), children.length);
+  const effectiveCount = Math.min(
+    getBestOfEffectiveCount(assessment),
+    children.length
+  );
   if (effectiveCount <= 0) return parentWeight;
-
   const topWeightSum = [...children]
-    .map((child) => (Number.isFinite(child.weight) ? Math.max(0, child.weight) : 0))
+    .map((child) =>
+      Number.isFinite(child.weight) ? Math.max(0, child.weight) : 0
+    )
     .sort((a, b) => b - a)
     .slice(0, effectiveCount)
     .reduce((sum, value) => sum + value, 0);
-
   if (!Number.isFinite(topWeightSum) || topWeightSum <= 0) return parentWeight;
   return Math.min(parentWeight, topWeightSum);
 }
@@ -92,7 +109,9 @@ export function Dashboard() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [targetResult, setTargetResult] = useState<TargetCheckResponse | null>(null);
+  const [targetResult, setTargetResult] = useState<TargetCheckResponse | null>(
+    null
+  );
   const [assessments, setAssessments] = useState<AssessmentRow[]>([]);
   const [gradedWeight, setGradedWeight] = useState(0);
   const [currentContribution, setCurrentContribution] = useState(0);
@@ -108,7 +127,9 @@ export function Dashboard() {
         const parsedTarget =
           savedTarget === null ? NaN : Number.parseFloat(savedTarget);
         const resolvedTarget =
-          Number.isFinite(parsedTarget) && parsedTarget >= 0 && parsedTarget <= 100
+          Number.isFinite(parsedTarget) &&
+          parsedTarget >= 0 &&
+          parsedTarget <= 100
             ? parsedTarget
             : DEFAULT_TARGET_GRADE;
         setTargetGrade(resolvedTarget);
@@ -132,8 +153,13 @@ export function Dashboard() {
           return;
         }
 
-        const graded = latest.assessments.filter((a) => !a.is_bonus && hasGrade(a));
-        const gradedW = graded.reduce((sum, a) => sum + getEffectiveWeight(a), 0);
+        const graded = latest.assessments.filter(
+          (a) => !a.is_bonus && hasGrade(a)
+        );
+        const gradedW = graded.reduce(
+          (sum, a) => sum + getEffectiveWeight(a),
+          0
+        );
         const contribution = graded.reduce((sum, assessment) => {
           const percent = getPercent(assessment);
           if (percent === null) return sum;
@@ -143,7 +169,9 @@ export function Dashboard() {
         setGradedWeight(Math.min(100, Math.max(0, gradedW)));
         setCurrentContribution(contribution);
 
-        const target = await checkTarget(resolvedCourseId, { target: resolvedTarget });
+        const target = await checkTarget(resolvedCourseId, {
+          target: resolvedTarget,
+        });
         setTargetResult(target);
 
         const rows = await Promise.all(
@@ -151,13 +179,18 @@ export function Dashboard() {
             const actualPercent = getPercent(assessment);
             if (actualPercent !== null) {
               const percentValue = actualPercent;
-              const contributionPoints = (percentValue * assessment.weight) / 100;
+              const contributionPoints =
+                (percentValue * assessment.weight) / 100;
               return {
                 name: assessment.name,
                 rowType: "graded",
                 weightLabel: `${assessment.weight}% of final grade`,
                 neededLabel: "Actual Performance",
-                needed: `${percentValue.toFixed(1)}% (${contributionPoints.toFixed(2)} / ${formatCompactNumber(assessment.weight)})`,
+                needed: `${percentValue.toFixed(
+                  1
+                )}% (${contributionPoints.toFixed(2)} / ${formatCompactNumber(
+                  assessment.weight
+                )})`,
                 contrib: `+${contributionPoints.toFixed(2)}%`,
               } satisfies AssessmentRow;
             }
@@ -174,12 +207,15 @@ export function Dashboard() {
               rowType: "ungraded",
               weightLabel: `${assessment.weight}% of final grade`,
               neededLabel: "Minimum Needed",
-              needed: `${percentValue.toFixed(1)}% (${contributionPoints.toFixed(2)} / ${formatCompactNumber(assessment.weight)})`,
+              needed: `${percentValue.toFixed(
+                1
+              )}% (${contributionPoints.toFixed(2)} / ${formatCompactNumber(
+                assessment.weight
+              )})`,
               contrib: `+${contributionPoints.toFixed(2)}%`,
             } satisfies AssessmentRow;
           })
         );
-
         setAssessments(rows);
         setError("");
       } catch (e) {
@@ -189,7 +225,6 @@ export function Dashboard() {
         setLoading(false);
       }
     };
-
     load();
   }, [ensureCourseIdFromList]);
 
@@ -197,44 +232,50 @@ export function Dashboard() {
   const requiredAverage = targetResult?.required_average_display ?? "0.0%";
   const workCompleted = `${gradedWeight.toFixed(0)}%`;
   const remainingWeight = Math.max(0, Math.min(100, 100 - gradedWeight));
-  const targetFill = Math.max(0, Math.min(targetGrade, 100));
-  const progressWidth = `${targetFill}%`;
-  // Use interactive slider value for performance assumption
-  const clampedPerformanceAssumption = Math.max(0, Math.min(assumedPerformance, 100));
+  const progressWidth = `${Math.max(0, Math.min(targetGrade, 100))}%`;
+  const clampedPerformanceAssumption = Math.max(
+    0,
+    Math.min(assumedPerformance, 100)
+  );
   const targetClassification = targetResult?.classification ?? "Challenging";
+
   const targetTone =
     targetClassification === "Not Possible"
       ? "red"
       : targetClassification === "Challenging" ||
-          targetClassification === "Very Challenging"
-        ? "orange"
-        : targetClassification === "Achievable" ||
-            targetClassification === "Comfortable" ||
-            targetClassification === "Already Achieved" ||
-            targetClassification === "Complete"
-          ? "green"
-          : "orange";
+        targetClassification === "Very Challenging"
+      ? "orange"
+      : targetClassification === "Achievable" ||
+        targetClassification === "Comfortable" ||
+        targetClassification === "Already Achieved" ||
+        targetClassification === "Complete"
+      ? "green"
+      : "orange";
+
   const targetBadgeClass =
     targetTone === "red"
       ? "bg-red-50 text-red-700"
       : targetTone === "green"
-        ? "bg-green-50 text-green-700"
-        : "bg-orange-50 text-orange-700";
+      ? "bg-green-50 text-green-700"
+      : "bg-orange-50 text-orange-700";
+
   const targetBarClass =
     targetTone === "red"
       ? "bg-red-500"
       : targetTone === "green"
-        ? "bg-green-500"
-        : "bg-orange-400";
+      ? "bg-green-500"
+      : "bg-orange-400";
+
   const targetMessageClass =
     targetTone === "red"
       ? "border-red-100 bg-red-50 text-red-800"
       : targetTone === "green"
-        ? "border-green-100 bg-green-50 text-green-800"
-        : "border-orange-100 bg-orange-50 text-orange-800";
+      ? "border-green-100 bg-green-50 text-green-800"
+      : "border-orange-100 bg-orange-50 text-orange-800";
+
   const targetExplanation =
     targetResult?.explanation ??
-    "Your target is possible but will require strong performance. This target is achievable but will require strong performance ahead.";
+    "Your target is possible but will require strong performance.";
 
   const projectedFinal = useMemo(() => {
     return (
@@ -257,7 +298,11 @@ export function Dashboard() {
       value: workCompleted,
       sub: `${remainingWeight.toFixed(0)}% still to go`,
     },
-    { label: "Required Average", value: requiredAverage, sub: "To reach your target" },
+    {
+      label: "Required Average",
+      value: requiredAverage,
+      sub: "To reach your target",
+    },
   ];
 
   return (
@@ -269,7 +314,7 @@ export function Dashboard() {
         </h2>
         <p className="text-sm text-gray-500">
           {
-            "Here's how everything fits together: your grades, goals, and path forward."
+            "How everything fits together: your grades, goals, and path forward."
           }
         </p>
         {error ? <p className="mt-2 text-sm text-red-500">{error}</p> : null}
@@ -301,15 +346,15 @@ export function Dashboard() {
             <TrendingUp size={12} /> {targetClassification}
           </span>
         </div>
-        <div className="mb-2 flex justify-between text-xs text-gray-500">
-        </div>
         <div className="mb-4 h-3 w-full rounded-full bg-gray-100">
-          <div 
+          <div
             className={`h-full rounded-full transition-all ${targetBarClass}`}
-            style={{ width: progressWidth }} 
+            style={{ width: progressWidth }}
           />
         </div>
-        <div className={`rounded-xl border p-4 text-xs leading-relaxed ${targetMessageClass}`}>
+        <div
+          className={`rounded-xl border p-4 text-xs leading-relaxed ${targetMessageClass}`}
+        >
           {targetExplanation}
         </div>
       </div>
@@ -317,7 +362,10 @@ export function Dashboard() {
       {/* 4. Performance Assumption */}
       <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
         <h3 className="mb-2 font-bold text-gray-800">Performance Assumption</h3>
-        <p className="mb-6 text-xs text-gray-400">Adjust the slider to see how different performance levels affect your projected grade.</p>
+        <p className="mb-6 text-xs text-gray-400">
+          Adjust the slider to see how different performance levels affect your
+          projected grade.
+        </p>
         <div className="mb-8 flex items-center gap-6">
           <input
             type="range"
@@ -331,11 +379,14 @@ export function Dashboard() {
             {clampedPerformanceAssumption.toFixed(0)}%
           </span>
         </div>
-        <p className="mb-4 text-xs text-gray-400">Assumed performance on remaining assessments</p>
         <div className="flex items-center justify-between rounded-2xl bg-[#F9F8F6] p-6">
           <div>
-            <p className="text-[10px] text-gray-400 uppercase">Projected Final Grade</p>
-            <p className="text-4xl font-bold text-gray-800">{projectedFinal.toFixed(1)}%</p>
+            <p className="text-[10px] text-gray-400 uppercase">
+              Projected Final Grade
+            </p>
+            <p className="text-4xl font-bold text-gray-800">
+              {projectedFinal.toFixed(1)}%
+            </p>
           </div>
           <div className="text-right">
             {belowTarget ? (
@@ -347,8 +398,8 @@ export function Dashboard() {
             )}
             <p className="mt-1 text-[10px] text-gray-400">
               {belowTarget
-                ? `With ${clampedPerformanceAssumption.toFixed(1)}% average, you'll be ${shortfall.toFixed(1)}% short.`
-                : `With ${clampedPerformanceAssumption.toFixed(1)}% average, you'll be ${(projectedFinal - targetGrade).toFixed(1)}% above target.`}
+                ? `Short by ${shortfall.toFixed(1)}%.`
+                : `Above by ${(projectedFinal - targetGrade).toFixed(1)}%.`}
             </p>
           </div>
         </div>
@@ -369,34 +420,134 @@ export function Dashboard() {
                 <p className="text-[10px] text-gray-400">{a.weightLabel}</p>
               </div>
             </div>
-            <div
-              className="flex justify-between items-center rounded-xl p-4 border border-orange-100 bg-orange-50/50"
-            >
+            <div className="flex justify-between items-center rounded-xl p-4 border border-orange-100 bg-orange-50/50">
               <div>
-                <p className="text-[9px] uppercase text-gray-400">{a.neededLabel}</p>
+                <p className="text-[9px] uppercase text-gray-400">
+                  {a.neededLabel}
+                </p>
                 <p
                   className={`text-xl font-bold ${
-                    a.rowType === "graded" ? "text-green-600" : "text-orange-600"
+                    a.rowType === "graded"
+                      ? "text-green-600"
+                      : "text-orange-600"
                   }`}
                 >
                   {a.needed}
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-[9px] uppercase text-gray-400">Would contribute</p>
-                <p className="text-sm font-bold text-gray-700">{a.contrib} to final</p>
+                <p className="text-[9px] uppercase text-gray-400">
+                  Would contribute
+                </p>
+                <p className="text-sm font-bold text-gray-700">
+                  {a.contrib} to final
+                </p>
               </div>
             </div>
           </div>
         ))}
       </div>
 
+      {/* GPA Overview Section (NOW AT THE BOTTOM) */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">GPA Overview</h2>
+          <p className="text-xs text-gray-500">
+            Track performance across terms and overall
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {/* Term GPA Card */}
+          <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <GraduationCap size={18} className="text-slate-600" />
+              <h3 className="font-bold text-gray-800">Term GPA</h3>
+            </div>
+            <div className="text-center py-6">
+              <div className="text-5xl font-bold text-gray-800">4.00</div>
+              <p className="text-[10px] text-gray-400 mt-1">
+                Based on courses in this semester
+              </p>
+              <span className="inline-block mt-2 rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
+                A+
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 border-t border-b border-gray-50 py-4 my-4">
+              <StatItem label="Courses" value="1" />
+              <StatItem label="Credits" value="3.0" />
+              <StatItem label="Scale" value="4.0" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-[9px] font-bold uppercase text-gray-400">
+                Courses in Fall 2026
+              </p>
+              <div className="flex justify-between items-center rounded-xl bg-gray-50 p-3">
+                <div>
+                  <p className="text-xs font-bold text-gray-800">
+                    EECS 2311 – Software Design
+                  </p>
+                  <p className="text-[10px] text-gray-400">3 credits</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-bold text-green-600">90.0%</p>
+                  <p className="text-[10px] text-gray-400">4.00 GP</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Cumulative GPA Card */}
+          <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp size={18} className="text-slate-600" />
+              <h3 className="font-bold text-gray-800">Cumulative GPA (cGPA)</h3>
+            </div>
+            <div className="flex justify-center mb-4">
+              <div className="flex rounded-lg bg-gray-100 p-1">
+                {["4.0", "9.0", "10.0"].map((s) => (
+                  <button
+                    key={s}
+                    className={`px-4 py-1 text-[10px] rounded-md ${
+                      s === "4.0"
+                        ? "bg-white shadow-sm font-bold"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="text-center py-2">
+              <div className="text-5xl font-bold text-gray-800">4.00</div>
+              <p className="text-[10px] text-gray-400 mt-1">Out of 4.0</p>
+              <span className="inline-block mt-2 rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
+                A+
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-6">
+              <StatItem label="Total Courses" value="1" />
+              <StatItem label="Total Credits" value="3.0" />
+              <StatItem label="Average %" value="90.0%" />
+              <StatItem label="Terms" value="1" />
+            </div>
+            <div className="mt-6">
+              <div className="flex justify-between text-[10px] mb-1">
+                <span className="text-gray-400 uppercase font-bold">
+                  Performance
+                </span>
+                <span className="text-green-600 font-bold">100%</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-gray-100">
+                <div className="h-full w-full rounded-full bg-green-500" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 6. Action Button */}
       <div className="text-center">
-        <p className="mb-6 text-[10px] text-gray-400">
-          This is your complete academic picture. Ready to explore different
-          scenarios?
-        </p>
         <button
           onClick={() => router.push("/setup/explore")}
           className="rounded-xl bg-[#5D737E] px-10 py-4 font-bold text-white shadow-lg hover:bg-[#4A5D66] transition"
