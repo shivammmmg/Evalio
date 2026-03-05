@@ -161,6 +161,7 @@ DROP_LOWEST_ALT_RULE_REGEX = re.compile(r"\bdrop\s+(\d+)\s+lowest\b", re.IGNOREC
 TOTAL_COUNT_REGEX = re.compile(r"\b(?:out\s+of|of)\s+(\d+)\b", re.IGNORECASE)
 COURSE_CODE_REGEX = re.compile(r"\b[A-Z]{2,6}\s?-?\s?\d{3,4}[A-Z]?\b")
 COURSE_CODE_ALT_REGEX = re.compile(r"\b[A-Z]{2,6}\s?-?\s?\d[A-Z]\d{2}\b")
+FILENAME_COURSE_CODE_REGEX = re.compile(r"(?<![A-Z0-9])([A-Z]{1,6})[\s-]?(\d{4})(?![A-Z0-9])")
 PHONE_NUMBER_REGEX = re.compile(
     r"\b(?:\+?\d{1,2}[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b"
 )
@@ -224,6 +225,14 @@ def extract_course_code(full_text: str) -> str | None:
                 best_candidate = _normalize_course_code(match)
 
     return best_candidate
+
+
+def extract_course_code_from_filename(filename: str) -> str | None:
+    candidate = filename.upper()
+    match = FILENAME_COURSE_CODE_REGEX.search(candidate)
+    if match is None:
+        return None
+    return f"{match.group(1)}{match.group(2)}"
 
 
 def get_child_base_label(parent_name: str) -> str:
@@ -454,6 +463,8 @@ class ExtractionService:
     ) -> ExtractionResponse:
         debug_enabled = bool(os.getenv("FILTER_DEBUG"))
         start_total = time.perf_counter()
+        print("[UPLOAD_FILENAME]")
+        print(f"filename={filename}")
         text_result = self._extract_text(
             filename=filename,
             content_type=content_type,
@@ -473,29 +484,58 @@ class ExtractionService:
                 trigger_reasons=["no_extracted_text"],
                 course_code=None,
             )
-        course_code_executor = ThreadPoolExecutor(max_workers=1)
-        course_code_future: Future[str | None] = course_code_executor.submit(
-            extract_course_code,
-            full_text,
-        )
-        resolved_course_code: dict[str, str | None] = {"value": None, "done": False}
+        filename_course_code = extract_course_code_from_filename(filename)
+        print("[FILENAME_COURSE_CODE_DETECTION]")
+        print(f"filename={filename}")
+        print(f"detected_course_code={filename_course_code}")
+        course_code_executor: ThreadPoolExecutor | None = None
+        course_code_future: Future[str | None] | None = None
+        resolved_course_code: dict[str, str | None | bool] = {
+            "value": filename_course_code,
+            "done": filename_course_code is not None,
+        }
+        if filename_course_code is None:
+            print("fallback=text_extraction")
+            print("[COURSE_CODE_FALLBACK]")
+            print("course_code_source=text")
+            course_code_executor = ThreadPoolExecutor(max_workers=1)
+            course_code_future = course_code_executor.submit(
+                extract_course_code,
+                full_text,
+            )
+        else:
+            print("[FILENAME_COURSE_CODE_SELECTED]")
+            print("course_code_source=filename")
+            print(f"course_code={filename_course_code}")
 
         def _resolve_course_code() -> str | None:
-            if resolved_course_code["done"]:
-                return resolved_course_code["value"]
+            if bool(resolved_course_code["done"]):
+                return resolved_course_code["value"] if isinstance(resolved_course_code["value"], str) else None
+            if course_code_future is None:
+                return None
             try:
                 resolved_course_code["value"] = course_code_future.result()
             except Exception:
                 resolved_course_code["value"] = None
             finally:
                 resolved_course_code["done"] = True
-                course_code_executor.shutdown(wait=False)
-            return resolved_course_code["value"]
+                if course_code_executor is not None:
+                    course_code_executor.shutdown(wait=False)
+            return resolved_course_code["value"] if isinstance(resolved_course_code["value"], str) else None
         llm_input_text, filtered_used = self._grading_filter.filter(full_text)
         print("FILTERED_TEXT_LEN:", len(llm_input_text))
         print("FILTERED_TEXT_APPROX_TOKENS:", len(llm_input_text) / 4)
         print("FILTER_USED:", filtered_used)
         filtered_warning = f"filtered_text_used:{str(filtered_used).lower()}"
+        retry_warning: str | None = None
+
+        def _sum_non_bonus_weights(assessments: list[ExtractionAssessment]) -> Decimal:
+            total = Decimal("0.00")
+            for assessment in assessments:
+                if assessment.is_bonus:
+                    continue
+                total += Decimal(str(assessment.weight))
+            return total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         try:
             start_llm = time.perf_counter()
@@ -556,16 +596,64 @@ class ExtractionService:
         validation_result = self._validate_structure(
             assessment_entries=normalized["assessment_entries"]
         )
+        filtered_weight_sum = _sum_non_bonus_weights(normalized["assessments"])
+        retry_used = False
+        if filtered_weight_sum < Decimal("60.00") and not retry_used:
+            retry_used = True
+            retry_warning = "full_text_retry_attempted:true"
+            if debug_enabled:
+                print(
+                    f"[FULL_TEXT_RETRY] filtered_weight_sum={filtered_weight_sum} "
+                    "retrying_llm_with_full_text=true"
+                )
+            try:
+                retry_start = time.perf_counter()
+                retry_payload = self._llm_client.extract(full_text)
+                retry_end = time.perf_counter()
+                print("LLM_RETRY_DURATION_SECONDS:", round(retry_end - retry_start, 3))
+                retry_normalized = self._normalize_llm_payload(retry_payload)
+                retry_validation_result = self._validate_structure(
+                    assessment_entries=retry_normalized["assessment_entries"]
+                )
+                retry_weight_sum = _sum_non_bonus_weights(retry_normalized["assessments"])
+                filtered_distance = abs(filtered_weight_sum - Decimal("100.00"))
+                full_distance = abs(retry_weight_sum - Decimal("100.00"))
+                if debug_enabled:
+                    print(
+                        f"[FULL_TEXT_RETRY_COMPARE] filtered_distance={filtered_distance} "
+                        f"full_distance={full_distance}"
+                    )
+                if full_distance < filtered_distance:
+                    normalized = retry_normalized
+                    validation_result = retry_validation_result
+                    if debug_enabled:
+                        print("[FULL_TEXT_RETRY_SELECTED] source=full_text_retry")
+            except LlmExtractionError as exc:
+                retry_warning = f"full_text_retry_failed:{exc.reason_code}"
+                if debug_enabled:
+                    print(f"[FULL_TEXT_RETRY_ERROR] reason={exc.reason_code} message={exc.message}")
+            except ValueError as exc:
+                retry_warning = self._format_warning("full_text_retry_invalid_schema", str(exc))
+                if debug_enabled:
+                    print(f"[FULL_TEXT_RETRY_SCHEMA_ERROR] message={exc}")
+            except Exception as exc:  # pragma: no cover - defensive fallback
+                retry_warning = self._format_warning("full_text_retry_unexpected_failure", str(exc))
+                if debug_enabled:
+                    print(f"[FULL_TEXT_RETRY_UNEXPECTED_ERROR] message={exc}")
+
         confidence_result = self._compute_confidence_from_llm(
             assessment_entries=normalized["assessment_entries"],
             deadlines=normalized["deadlines"],
             validation_result=validation_result,
         )
+        source_warnings = [filtered_warning]
+        if retry_warning:
+            source_warnings.append(retry_warning)
         parse_warnings = self._merge_parse_warnings(
             text_result.get("parse_warnings", []),
             normalized.get("parse_warnings", []),
             validation_result.get("warnings", []),
-            [filtered_warning],
+            source_warnings,
         )
         if confidence_result["confidence_score"] < 60:
             parse_warnings = self._merge_parse_warnings(parse_warnings, ["low_confidence"])
@@ -600,33 +688,29 @@ class ExtractionService:
             stub=False,
         )
 
-        if not validation_result["valid"]:
-            end_total = time.perf_counter()
-            print("TOTAL_EXTRACTION_SECONDS:", round(end_total - start_total, 3))
-            if debug_enabled:
-                print(
-                    f"[FINAL_EXTRACTION_RESULT] assessments={len(normalized['assessments'])} "
-                    f"deadlines={len(normalized['deadlines'])} structure_valid=False"
-                )
-            return self._build_validation_failure_response(
-                diagnostics=diagnostics,
-                course_code=_resolve_course_code(),
-            )
+        structure_valid = validation_result["valid"]
+        if not structure_valid:
+            diagnostics.deterministic_failed_validation = True
+            diagnostics.failure_reason = validation_result.get("reason_code") or validation_result.get("reason")
 
         end_total = time.perf_counter()
         print("TOTAL_EXTRACTION_SECONDS:", round(end_total - start_total, 3))
         if debug_enabled:
             print(
                 f"[FINAL_EXTRACTION_RESULT] assessments={len(normalized['assessments'])} "
-                f"deadlines={len(normalized['deadlines'])} structure_valid=True"
+                f"deadlines={len(normalized['deadlines'])} structure_valid={structure_valid}"
             )
         return ExtractionResponse(
             course_code=_resolve_course_code(),
             assessments=normalized["assessments"],
             deadlines=normalized["deadlines"],
             diagnostics=diagnostics,
-            structure_valid=True,
-            message="Deterministic extraction completed",
+            structure_valid=structure_valid,
+            message=(
+                "Deterministic extraction completed"
+                if structure_valid
+                else "Deterministic extraction completed with invalid structure. Manual review required."
+            ),
         )
 
     def extract_legacy(self, request: OutlineExtractionRequest) -> ExtractionResponse:
@@ -1137,6 +1221,16 @@ class ExtractionService:
                 "parse_warnings": docx_result["parse_warnings"],
             }
 
+        if (
+            lowered_name.endswith(".png")
+            or lowered_name.endswith(".jpg")
+            or lowered_name.endswith(".jpeg")
+            or "image/png" in lowered_type
+            or "image/jpeg" in lowered_type
+            or "image/jpg" in lowered_type
+        ):
+            return self._extract_text_image(file_bytes)
+
         if lowered_name.endswith(".pdf") or "application/pdf" in lowered_type:
             return self._extract_text_pdf(file_bytes)
 
@@ -1281,6 +1375,52 @@ class ExtractionService:
                 "text": "",
                 "available": True,
                 "error": self._truncate_error(f"OCR failed: {exc}"),
+                "parse_warnings": parse_warnings,
+            }
+
+    def _extract_text_image(self, file_bytes: bytes) -> dict[str, Any]:
+        parse_warnings: list[str] = []
+        if shutil.which("tesseract") is None:
+            message = "OCR dependencies not available (tesseract missing)"
+            parse_warnings.append(self._format_warning("ocr_dependencies_missing", message))
+            return {
+                "text": "",
+                "ocr_used": True,
+                "ocr_available": False,
+                "ocr_error": message,
+                "parse_warnings": parse_warnings,
+            }
+
+        try:
+            from PIL import Image
+            import pytesseract
+        except ImportError as exc:
+            parse_warnings.append(self._format_warning("ocr_import_error", str(exc)))
+            return {
+                "text": "",
+                "ocr_used": True,
+                "ocr_available": False,
+                "ocr_error": self._truncate_error(f"OCR package missing: {exc}"),
+                "parse_warnings": parse_warnings,
+            }
+
+        try:
+            with Image.open(io.BytesIO(file_bytes)) as image:
+                text = pytesseract.image_to_string(image)
+            return {
+                "text": text,
+                "ocr_used": True,
+                "ocr_available": True,
+                "ocr_error": None,
+                "parse_warnings": parse_warnings,
+            }
+        except Exception as exc:
+            parse_warnings.append(self._format_warning("ocr_image_failure", str(exc)))
+            return {
+                "text": "",
+                "ocr_used": True,
+                "ocr_available": True,
+                "ocr_error": self._truncate_error(f"OCR image extraction failed: {exc}"),
                 "parse_warnings": parse_warnings,
             }
 
@@ -2027,14 +2167,20 @@ class ExtractionService:
                 "errors": errors,
             }
 
-        if abs(sum_non_bonus - Decimal("100.00")) > Decimal("0.01"):
+        if sum_non_bonus == Decimal("100.00"):
+            pass
+        elif Decimal("60.00") <= sum_non_bonus < Decimal("100.00"):
+            warnings.append("weight_sum_below_100_tolerated")
+        elif Decimal("100.00") < sum_non_bonus <= Decimal("110.00"):
+            warnings.append("weight_sum_above_100_tolerated")
+        else:
             errors.append(
                 _error(
-                    code="weight_sum_not_100",
-                    message="Weight sum does not equal 100",
+                    code="weight_sum_out_of_range",
+                    message="Weight sum must be between 60 and 110 (inclusive) when non-bonus",
                 )
             )
-            first = _first_error_by_code("weight_sum_not_100")
+            first = _first_error_by_code("weight_sum_out_of_range")
             return {
                 "valid": False,
                 "reason": first["message"],
