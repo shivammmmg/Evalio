@@ -6,11 +6,17 @@ DEBUG = os.getenv("FILTER_DEBUG") == "1"
 ANCHOR_PHRASES = [
     "course evaluation",
     "evaluation scheme",
-    "grading scheme",
-    "marking scheme",
-    "grading policy",
     "evaluation",
+    "grading scheme",
+    "grading policy",
     "grading",
+    "grade breakdown",
+    "marking scheme",
+    "graded assessment",
+    "assessment evaluation",
+    "graded assessment evaluation",
+    "assessment",
+    "assessments",
 ]
 LINES_ABOVE = 5
 LINES_BELOW = 30
@@ -85,6 +91,8 @@ class GradingSectionFilter:
 
     def _is_anchor_line(self, normalized_line: str) -> bool:
         if not normalized_line:
+            return False
+        if len(normalized_line.split()) > 8:
             return False
 
         for anchor in ANCHOR_PHRASES:

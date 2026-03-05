@@ -229,6 +229,8 @@ def extract_course_code(full_text: str) -> str | None:
 def get_child_base_label(parent_name: str) -> str:
     name = parent_name.lower()
 
+    if "lab test" in name:
+        return "Lab test"
     if "quiz" in name:
         return "Quiz"
     if "lab" in name:
