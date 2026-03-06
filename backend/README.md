@@ -11,6 +11,7 @@ FastAPI backend for authentication, course management, extraction, grading analy
   - `app/routes/courses.py`
   - `app/routes/extraction.py`
   - `app/routes/dashboard.py`
+  - `app/routes/scenarios.py`
   - `app/routes/gpa.py`
   - `app/routes/deadlines.py`
 - Service layer in `app/services/`
@@ -78,9 +79,50 @@ FILTER_DEBUG=1
 
 ```bash
 USE_POSTGRES=true
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/evalio
+DATABASE_URL=postgresql+psycopg://localhost:5432/evalio
 POSTGRES_FALLBACK_TO_MEMORY=true
 ```
+
+## PostgreSQL Local Setup (Recommended)
+
+1. Start Postgres (macOS/Homebrew):
+
+```bash
+brew services start postgresql@16
+```
+
+2. Ensure tools are in PATH (one-time):
+
+```bash
+echo 'export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+hash -r
+```
+
+3. Verify service:
+
+```bash
+psql --version
+pg_isready -h localhost -p 5432
+```
+
+4. Create DB once:
+
+```bash
+createdb evalio
+```
+
+5. Run backend with Postgres and fail-fast (no in-memory fallback):
+
+```bash
+source .venv/bin/activate
+export USE_POSTGRES=true
+export DATABASE_URL='postgresql+psycopg://localhost:5432/evalio'
+export POSTGRES_FALLBACK_TO_MEMORY=false
+uvicorn app.main:app --reload --port 8000
+```
+
+Note: startup `init_db()` now auto-aligns the `rules.rule_type` DB constraint with backend values (`pure_multiplicative`, `best_of`, `drop_lowest`, `mandatory_pass`).
 
 ### Optional Google Calendar integration
 
@@ -126,6 +168,14 @@ All `/courses/*`, `/gpa/*`, `/dashboard/*`, `/deadlines/*`, and extraction endpo
 - `POST /courses/{course_id}/dashboard/whatif`
 - `GET /courses/{course_id}/dashboard/strategies`
 
+### Scenarios
+
+- `POST /courses/{course_id}/scenarios`
+- `GET /courses/{course_id}/scenarios`
+- `GET /courses/{course_id}/scenarios/{scenario_id}`
+- `GET /courses/{course_id}/scenarios/{scenario_id}/run`
+- `DELETE /courses/{course_id}/scenarios/{scenario_id}`
+
 ### GPA
 
 - `GET /gpa/scales`
@@ -148,7 +198,7 @@ All `/courses/*`, `/gpa/*`, `/dashboard/*`, `/deadlines/*`, and extraction endpo
 ## Storage Notes
 
 - Default mode uses in-memory repositories.
-- If `USE_POSTGRES=true`, courses/users/deadlines use PostgreSQL repositories.
+- If `USE_POSTGRES=true`, courses/users/deadlines/scenarios use PostgreSQL repositories.
 
 ## Testing
 
