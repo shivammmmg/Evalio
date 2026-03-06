@@ -539,3 +539,116 @@ The team successfully delivered:
 - Structured Jira tracking
 
 Iteration 1 goals were met successfully, and the system remains stable with no major defects.
+
+---
+
+# Iteration 2 Log (ITR2)
+
+This section records the planning, development process, task assignments, time tracking, and design decisions for Iteration 2 of the Evalio project.
+
+## 1. Meeting Minutes (ITR2)
+(To be updated)
+
+## 2. Plan Review (ITR1 → ITR2)
+(To be updated)
+
+## 3. Task Assignment & Work Breakdown (ITR2)
+
+### ITR2-4 — Course Evaluation & Rule Modeling  
+([SCRUM-106](https://rimaaa.atlassian.net/browse/SCRUM-106))
+
+**Story Owner:** Bardiya Ameri  
+**Planned Effort:** 4 days  
+**Actual Effort:** 3 day  
+
+#### Story Description
+
+As a student, I want the system to evaluate my course performance using York University’s specific grading rules,  
+so that I can understand my academic standing through letter grades, grade points, and realistic projections of what is required to hit my targets.
+
+#### Scope (ITR2)
+
+- Institutional grading logic:
+  - Map calculated percentages to the YorkU 9-point scale (A+ = 9, A = 8, etc.)
+  - Return structured results including:
+    - Letter grade
+    - Grade point value
+    - Performance descriptor (e.g., Exceptional, Excellent, Good)
+- Target feasibility analysis:
+  - Calculate the exact average required on remaining coursework to achieve a user-defined target
+- Dynamic difficulty classification:
+  - Categorize the target as:
+    - Comfortable
+    - Achievable
+    - Challenging
+    - Very Challenging
+    - Not Possible
+    - Already Achieved
+    - Complete (when remaining weight is 0)
+- Engine integrity:
+  - Deterministic and read-only (evaluations must not mutate or overwrite stored grade data)
+  - Independent of AI components to ensure mathematical correctness
+- Stability & integration:
+  - Maintain compatibility with the in-memory stub database
+  - Ensure consistent rounding and stable output at boundary thresholds (e.g., 79.5% vs 80.0%)
+
+#### Development Tasks & Assignments (SCRUM-106)
+
+- Backend: Evaluation & rule modeling engine  
+  - Assignee: Kartik  
+  - Status: DONE (SCRUM-112)
+
+- Frontend: Evaluation results UI  
+  - Assignee: Shadi  
+  - Status: DONE (SCRUM-115)
+
+- Frontend: UI/UX design support  
+  - Assignee: Shadi  
+  - Status: DONE (SCRUM-130)
+
+- Database: Support evaluation data/model compatibility  
+  - Assignee: Himanshi  
+  - Status: DONE (SCRUM-116)
+
+- Testing: Unit & integration tests for evaluation logic  
+  - Assignee: Bardiya  
+  - Status: DONE (SCRUM-117)
+
+- Docs: Update log.md & technical notes  
+  - Assignee: Bardiya  
+  - Status: TO DO (SCRUM-118)
+
+#### Key Design Decisions / Notes
+
+- Deterministic + AI-independent engine: evaluation is purely mathematical for correctness and reproducibility.
+- Read-only analysis: evaluation outputs do not overwrite real grades; repeated calls produce consistent results.
+- Boundary handling: YorkU thresholds and rounding rules were designed to avoid drift at cutoffs (e.g., 79.5 vs 80.0).
+- Edge cases covered:
+  - Remaining weight = 0 → classification “Complete”
+  - Target already met → classification “Already Achieved”
+  - Required average > 100 → classification “Not Possible”
+
+#### Testing Summary (SCRUM-117)
+
+Automated tests verify:
+- YorkU boundary mappings and rounding thresholds.
+- Required remaining average math for partially graded courses.
+- Difficulty classification threshold correctness.
+- Non-mutation guarantees (analysis endpoints do not modify stored course data).
+- Repeat-call stability (same inputs yield the same results).
+
+#### Out of Scope / Future Work
+
+- Institution-specific grading scale configuration.
+- Saving evaluation history and trends over time.
+- Advanced strategy engine beyond rule-based difficulty labels.
+- Additional UI visualization for showing calculation steps (if prioritized).
+
+## 4. Major Design Decisions (ITR2)
+(To be updated)
+
+## 5. Concerns / Issues (ITR2)
+(To be updated)
+
+## 6. Iteration Summary (ITR2)
+(To be updated)
