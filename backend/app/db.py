@@ -44,6 +44,9 @@ class UserDB(Base):
     )
 
     courses: Mapped[list["CourseDB"]] = relationship(back_populates="user")
+    calendar_connections: Mapped[list["CalendarConnectionDB"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class CourseDB(Base):
@@ -55,6 +58,9 @@ class CourseDB(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     term: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    credits: Mapped[float] = mapped_column(Numeric(3, 1), nullable=False, default=3.0, server_default="3.0")
+    final_percentage: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    grade_type: Mapped[str] = mapped_column(String(20), nullable=False, default="numeric", server_default="'numeric'")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -66,6 +72,15 @@ class CourseDB(Base):
         back_populates="course", cascade="all, delete-orphan"
     )
     scenarios: Mapped[list["ScenarioDB"]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
+    deadlines: Mapped[list["DeadlineDB"]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
+    grade_target: Mapped["GradeTargetDB | None"] = relationship(
+        back_populates="course", uselist=False, cascade="all, delete-orphan"
+    )
+    categories: Mapped[list["AssessmentCategoryDB"]] = relationship(
         back_populates="course", cascade="all, delete-orphan"
     )
 
@@ -80,6 +95,12 @@ class AssessmentDB(Base):
     parent_assessment_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("assessments.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    category_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("assessment_categories.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -100,6 +121,7 @@ class AssessmentDB(Base):
         remote_side="AssessmentDB.id", back_populates="children"
     )
     children: Mapped[list["AssessmentDB"]] = relationship(back_populates="parent")
+    category: Mapped["AssessmentCategoryDB | None"] = relationship(back_populates="assessments")
     rule: Mapped["RuleDB | None"] = relationship(
         back_populates="assessment", uselist=False, cascade="all, delete-orphan"
     )
@@ -183,6 +205,109 @@ class DeadlineDB(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+    course: Mapped[CourseDB] = relationship(back_populates="deadlines")
+    exports: Mapped[list["DeadlineExportDB"]] = relationship(
+        back_populates="deadline", cascade="all, delete-orphan"
+    )
+
+
+class CalendarConnectionDB(Base):
+    """Google Calendar (or other provider) OAuth connections per user."""
+    __tablename__ = "calendar_connections"
+    __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_calendar_connection_user_provider"),)
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)  # e.g. 'google'
+    calendar_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_expiry: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_connected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    user: Mapped[UserDB] = relationship(back_populates="calendar_connections")
+    deadline_exports: Mapped[list["DeadlineExportDB"]] = relationship(
+        back_populates="connection", cascade="all, delete-orphan"
+    )
+
+
+class GradeTargetDB(Base):
+    """User-defined target grade for a course (one per course)."""
+    __tablename__ = "grade_targets"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    course_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
+    target_percentage: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    course: Mapped[CourseDB] = relationship(back_populates="grade_target")
+
+
+class AssessmentCategoryDB(Base):
+    """Optional grouping of assessments by category (e.g., 'Assignments', 'Exams')."""
+    __tablename__ = "assessment_categories"
+    __table_args__ = (UniqueConstraint("course_id", "name", name="uq_assessment_category_course_name"),)
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    course_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    weight: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    course: Mapped[CourseDB] = relationship(back_populates="categories")
+    assessments: Mapped[list["AssessmentDB"]] = relationship(back_populates="category")
+
+
+class DeadlineExportDB(Base):
+    """Tracks which deadlines have been exported to external calendars."""
+    __tablename__ = "deadline_exports"
+    __table_args__ = (
+        UniqueConstraint("deadline_id", "connection_id", "provider", name="uq_deadline_export_unique"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    deadline_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("deadlines.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    connection_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("calendar_connections.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)  # e.g. 'google'
+    external_event_id: Mapped[str] = mapped_column(Text, nullable=False)
+    exported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    deadline: Mapped[DeadlineDB] = relationship(back_populates="exports")
+    connection: Mapped[CalendarConnectionDB] = relationship(back_populates="deadline_exports")
 
 
 def init_db() -> None:

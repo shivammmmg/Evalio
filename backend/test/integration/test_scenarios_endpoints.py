@@ -82,7 +82,7 @@ def test_scenario_crud_and_run_non_mutating(auth_client):
     # Delete scenario
     deleted = auth_client.delete(f"/courses/{course_id}/scenarios/{scenario_id}")
     assert deleted.status_code == 200
-    assert deleted.json()["deleted"] is True
+    assert deleted.json()["message"] == "Scenario deleted"
 
     # List should be empty
     listed2 = auth_client.get(f"/courses/{course_id}/scenarios")

@@ -5,13 +5,17 @@ from fastapi import Depends, HTTPException, Request, status
 
 from app.config import AUTH_COOKIE_NAME
 from app.repositories.base import (
+    CalendarConnectionRepository,
     CourseRepository,
     DeadlineRepository,
+    GradeTargetRepository,
     ScenarioRepository,
     UserRepository,
 )
+from app.repositories.inmemory_calendar_repo import InMemoryCalendarRepository
 from app.repositories.inmemory_course_repo import InMemoryCourseRepository
 from app.repositories.inmemory_deadline_repo import InMemoryDeadlineRepository
+from app.repositories.inmemory_grade_target_repo import InMemoryGradeTargetRepository
 from app.repositories.inmemory_scenario_repo import InMemoryScenarioRepository
 from app.repositories.inmemory_user_repo import InMemoryUserRepository
 from app.services.auth_service import AuthService, AuthenticatedUser, AuthenticationError
@@ -106,10 +110,48 @@ def _build_scenario_repo() -> ScenarioRepository:
     return InMemoryScenarioRepository()
 
 
+def _build_calendar_repo() -> CalendarConnectionRepository:
+    if _is_truthy_env(os.getenv("USE_POSTGRES")):
+        try:
+            from app.repositories.postgres_calendar_repo import PostgresCalendarRepository
+
+            return PostgresCalendarRepository()
+        except Exception as exc:
+            if not _allow_postgres_fallback():
+                raise
+            warnings.warn(
+                "USE_POSTGRES=true but Postgres calendar repository initialization failed. "
+                f"Falling back to InMemoryCalendarRepository. Reason: {exc}",
+                RuntimeWarning,
+            )
+            return InMemoryCalendarRepository()
+    return InMemoryCalendarRepository()
+
+
+def _build_grade_target_repo() -> GradeTargetRepository:
+    if _is_truthy_env(os.getenv("USE_POSTGRES")):
+        try:
+            from app.repositories.postgres_grade_target_repo import PostgresGradeTargetRepository
+
+            return PostgresGradeTargetRepository()
+        except Exception as exc:
+            if not _allow_postgres_fallback():
+                raise
+            warnings.warn(
+                "USE_POSTGRES=true but Postgres grade target repository initialization failed. "
+                f"Falling back to InMemoryGradeTargetRepository. Reason: {exc}",
+                RuntimeWarning,
+            )
+            return InMemoryGradeTargetRepository()
+    return InMemoryGradeTargetRepository()
+
+
 _course_repo = _build_course_repo()
 _user_repo = _build_user_repo()
 _deadline_repo = _build_deadline_repo()
 _scenario_repo = _build_scenario_repo()
+_calendar_repo = _build_calendar_repo()
+_grade_target_repo = _build_grade_target_repo()
 _course_service = CourseService(_course_repo)
 _auth_service = AuthService(_user_repo)
 _extraction_service = ExtractionService()
@@ -151,6 +193,14 @@ def get_scenario_repo() -> ScenarioRepository:
 
 def get_scenario_service() -> ScenarioService:
     return _scenario_service
+
+
+def get_calendar_repo() -> CalendarConnectionRepository:
+    return _calendar_repo
+
+
+def get_grade_target_repo() -> GradeTargetRepository:
+    return _grade_target_repo
 
 
 def get_current_user(
