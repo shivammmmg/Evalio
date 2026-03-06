@@ -155,9 +155,6 @@ export function Dashboard() {
   const [deadlines, setDeadlines] = useState<DashboardDeadline[]>([]);
   const { ensureCourseIdFromList } = useSetupCourse();
 
-  // Local state for the What-If Planner inputs
-  const [whatIfGrades, setWhatIfGrades] = useState<Record<string, string>>({});
-
   useEffect(() => {
     const load = async () => {
       try {
@@ -376,7 +373,6 @@ export function Dashboard() {
       .slice(0, 3);
   }, [deadlines]);
 
-  // Data for Learning Strategies (Matching Screenshot)
   const learningStrategies = [
     {
       name: "Final Exam",
@@ -623,104 +619,46 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* NEW: 7. What-If Planner & Learning Strategy */}
-      <div className="space-y-10">
-        {/* What-If Planner */}
-        <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
-          <h3 className="text-xl font-bold text-gray-800 mb-6">
-            What-If Planner
-          </h3>
-          <div className="space-y-4">
-            {learningStrategies.map((item) => (
-              <div
-                key={item.name}
-                className="bg-[#FAF7F2] p-5 rounded-2xl flex flex-col gap-2"
-              >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h4 className="font-bold text-gray-700">{item.name}</h4>
-                    <p className="text-xs text-gray-400">
-                      {item.weight}% of final grade
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button className="px-3 py-1.5 bg-[#E6E2DB] text-[10px] font-bold text-gray-600 rounded-lg hover:opacity-80 transition">
-                      Use 0
-                    </button>
-                    <button className="px-3 py-1.5 bg-[#E6E2DB] text-[10px] font-bold text-gray-600 rounded-lg hover:opacity-80 transition">
-                      Use 100
-                    </button>
-                    <div className="relative flex items-center">
-                      <input
-                        type="text"
-                        placeholder="NaN"
-                        className="w-16 p-1.5 border border-gray-200 rounded-lg text-right text-xs bg-white focus:outline-none focus:ring-1 focus:ring-slate-300"
-                        value={whatIfGrades[item.name] || ""}
-                        onChange={(e) =>
-                          setWhatIfGrades({
-                            ...whatIfGrades,
-                            [item.name]: e.target.value,
-                          })
-                        }
-                      />
-                      <span className="ml-1 text-xs text-gray-400">%</span>
-                    </div>
-                  </div>
-                </div>
-                <button className="flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-gray-600 uppercase tracking-tight">
-                  <ChevronDown size={12} /> Show Math
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 p-4 bg-blue-50/50 border border-blue-100 text-[#5D737E] text-[10px] rounded-xl font-medium">
-            What-if values are temporary and do not change your actual grades.
-          </div>
+      {/* 7. Learning Strategy */}
+      <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
+        <div className="flex items-center gap-2 mb-6">
+          <Lightbulb size={20} className="text-yellow-500" />
+          <h3 className="text-xl font-bold text-gray-800">Learning Strategy</h3>
         </div>
-
-        {/* Learning Strategy */}
-        <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
-          <div className="flex items-center gap-2 mb-6">
-            <Lightbulb size={20} className="text-yellow-500" />
-            <h3 className="text-xl font-bold text-gray-800">
-              Learning Strategy
-            </h3>
-          </div>
-          <div className="space-y-4">
-            {learningStrategies.map((item) => (
-              <div key={item.name} className="bg-[#FAF7F2] p-5 rounded-2xl">
-                <h4 className="font-bold text-gray-700">{item.name}</h4>
-                <p className="text-xs text-gray-400 mb-4">
-                  {item.weight}% of final grade
-                </p>
-                <div className="flex flex-wrap gap-2">
+        <div className="space-y-4">
+          {learningStrategies.map((item) => (
+            <div key={item.name} className="bg-[#FAF7F2] p-5 rounded-2xl">
+              <h4 className="font-bold text-gray-700">{item.name}</h4>
+              <p className="text-xs text-gray-400 mb-4">
+                {item.weight}% of final grade
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <span
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider
+                  ${
+                    item.priority === "High"
+                      ? "bg-red-100 text-red-600"
+                      : item.priority === "Medium"
+                      ? "bg-orange-100 text-orange-600"
+                      : "bg-green-100 text-green-600"
+                  }`}
+                >
+                  {item.priority} Priority
+                </span>
+                {item.tags.map((tag) => (
                   <span
-                    className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider
-                    ${
-                      item.priority === "High"
-                        ? "bg-red-100 text-red-600"
-                        : item.priority === "Medium"
-                        ? "bg-orange-100 text-orange-600"
-                        : "bg-green-100 text-green-600"
-                    }`}
+                    key={tag}
+                    className="px-3 py-1 bg-blue-50 border border-blue-100 text-[#5D737E] rounded-lg text-[10px] font-medium"
                   >
-                    {item.priority} Priority
+                    {tag}
                   </span>
-                  {item.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="px-3 py-1 bg-blue-50 border border-blue-100 text-[#5D737E] rounded-lg text-[10px] font-medium"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <button className="mt-4 flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-gray-600 uppercase tracking-tight">
-                  <ChevronDown size={12} /> Why this strategy
-                </button>
+                ))}
               </div>
-            ))}
-          </div>
+              <button className="mt-4 flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-gray-600 uppercase tracking-tight">
+                <ChevronDown size={12} /> Why this strategy
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -822,7 +760,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* 6. Action Button */}
+      {/* Action Button */}
       <div className="text-center">
         <button
           onClick={() => router.push("/setup/explore")}
