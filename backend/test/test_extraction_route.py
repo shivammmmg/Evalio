@@ -34,7 +34,7 @@ def test_extraction_outline_multipart_requires_file(auth_client):
 def test_extraction_outline_legacy_payload_malformed_returns_invalid_payload(auth_client):
     response = auth_client.post(
         "/extraction/outline",
-        data="{bad-json",
+        content="{bad-json",
         headers={"content-type": "application/json"},
     )
     assert response.status_code == 422
