@@ -161,9 +161,9 @@ so that I can set up my grading structure at the beginning of the term.
 - Backend and frontend integration required alignment on validation error formats.
 - No major blockers were encountered during development.
 
-### ITR1-2 — Edit & Validate Grading Structure  
-(https://rimaaa.atlassian.net/browse/SCRUM-39)
+### ITR1-2 — Edit & Validate Grading Structure
 
+(https://rimaaa.atlassian.net/browse/SCRUM-39)
 
 **Story Owner:** Kartik  
 **Planned Effort:** 6 hours  
@@ -211,10 +211,10 @@ so that I can correct mistakes and keep my grading structure consistent.
 5. Tests: Unit tests for edit/delete logic
 
    - Assignee: Bardiya
-  
-7.  Database: Ensure schema supports weight updates
 
-   - Assignee: Himanshi
+6. Database: Ensure schema supports weight updates
+
+- Assignee: Himanshi
 
 6. Docs: Update log.md for edit & validate grading structure
 
@@ -228,7 +228,8 @@ so that I can correct mistakes and keep my grading structure consistent.
 - Frontend integrated with backend to persist changes immediately upon blur/save.
 - No major blockers were encountered during development.
 
-### ITR1-3 — Grade Entry & Current Standing  
+### ITR1-3 — Grade Entry & Current Standing
+
 ([SCRUM-46](https://rimaaa.atlassian.net/browse/SCRUM-46))
 
 **Story Owner:** Shadi  
@@ -287,7 +288,8 @@ so that I can see my current standing in the course.
 - Integrated frontend with backend API for grade submission and reset functionality.
 - No major blockers were encountered during development.
 
-### ITR1-4 — Target Grade Feasibility  
+### ITR1-4 — Target Grade Feasibility
+
 ([SCRUM-53](https://rimaaa.atlassian.net/browse/SCRUM-53))
 
 **Story Owner:** Shivam  
@@ -346,7 +348,8 @@ As a student, I want to enter a target final grade so that I can know whether it
 - Stub database was reused from previous user story.
 - No major blockers encountered.
 
-### ITR1-5 — Minimum Required Score Calculation  
+### ITR1-5 — Minimum Required Score Calculation
+
 ([SCRUM-59](https://rimaaa.atlassian.net/browse/SCRUM-59))
 
 **Story Owner:** Rima  
@@ -399,7 +402,8 @@ As a student, I want to know the minimum score I need on a remaining assessment 
 - **Frontend Integration:** Linked the calculation to the Dashboard Assessment Breakdown, ensuring that if a target is mathematically impossible (>100% required), the UI clearly flags the goal as "Not Achievable."
 - **Edge Cases:** Handled scenarios where a user has already achieved their target grade before all assessments are completed.
 
-### ITR1-6 — What-If Scenario Analysis (Stretch)  
+### ITR1-6 — What-If Scenario Analysis (Stretch)
+
 ([SCRUM-65](https://rimaaa.atlassian.net/browse/SCRUM-65))
 
 **Story Owner:** Bardiya  
@@ -440,6 +444,7 @@ so that I can see how it would affect my final grade.
    - Assignee: Bardiya
 
 4. Docs: Update log.md to mark this story as a stretch feature and document the no-persistence decision
+
    - Assignee: Bardiya
 
 5. Frontend: What-if input (slider or number) and result display (Explore Scenarios page), and UX/UI Design
@@ -547,14 +552,17 @@ Iteration 1 goals were met successfully, and the system remains stable with no m
 This section records the planning, development process, task assignments, time tracking, and design decisions for Iteration 2 of the Evalio project.
 
 ## 1. Meeting Minutes (ITR2)
+
 (To be updated)
 
 ## 2. Plan Review (ITR1 → ITR2)
+
 (To be updated)
 
 ## 3. Task Assignment & Work Breakdown (ITR2)
 
 ### ITR2-2 — Persistent Multi-Course Planning System (DB + Multi-Course Support)
+
 SCRUM-96
 
 **Story Owner:** Himanshi Verma
@@ -562,9 +570,11 @@ SCRUM-96
 **Actual Effort:** 5 days
 
 #### Story Description
+
 As a student, when I manage my courses, I want my courses, grades, and what-if scenarios to be saved permanently so that I can track and plan my academic performance across sessions without losing data between sessions.
 
 #### Scope (ITR2)
+
 - Course persistence:
   - Courses and their structures are stored in a persistent database.
   - The system saves course data including assessments, grading rules, and weights.
@@ -578,14 +588,14 @@ As a student, when I manage my courses, I want my courses, grades, and what-if s
   - Saved scenarios can be reloaded without overwriting actual grades.
   - The system recalculates grades and feasibility correctly after loading persisted data.
 - Multi-course planning:
-Students can create and manage multiple courses.
-The application provides a course overview page showing:
- - Course name
- - Current grade
- - Target grade
- - Feasibility status
-Students can switch between courses without losing data.
-Deleting a course removes all related data using cascading delete rules.
+  Students can create and manage multiple courses.
+  The application provides a course overview page showing:
+- Course name
+- Current grade
+- Target grade
+- Feasibility status
+  Students can switch between courses without losing data.
+  Deleting a course removes all related data using cascading delete rules.
 - Dual database support:
   - The system supports both an in-memory stub database and a PostgreSQL database.
   - Repository abstraction allows switching between the two implementations.
@@ -594,6 +604,7 @@ Deleting a course removes all related data using cascading delete rules.
   - Integration tests verify correct persistence behaviour.
 
 #### Development Tasks & Assignments
+
 Backend: Implement Repository Layer & Multi-Course CRUD Logic
 Assignee: Shivam (SCRUM-96)
 
@@ -622,6 +633,7 @@ Docs: Update log.md (Persistence Architecture)
 Assignee: Himanshi (SCRUM-122)
 
 #### Notes / Reflection
+
 - Implemented a repository abstraction layer to support both the stub database and PostgreSQL without changing business logic.
 - Designed a relational database schema to persist courses, assessments, scores, scenarios, and deadlines.
 - Added referential integrity constraints and cascading deletes to maintain consistent data relationships.
@@ -629,12 +641,13 @@ Assignee: Himanshi (SCRUM-122)
 - Integration tests verified that data persists after application restart and that switching between stub and PostgreSQL works correctly.
 - No major blockers were encountered during development.
 
-### ITR2-4 — Course Evaluation & Rule Modeling  
+### ITR2-4 — Course Evaluation & Rule Modeling
+
 ([SCRUM-106](https://rimaaa.atlassian.net/browse/SCRUM-106))
 
 **Story Owner:** Bardiya Ameri  
 **Planned Effort:** 4 days  
-**Actual Effort:** 3 day  
+**Actual Effort:** 3 day
 
 #### Story Description
 
@@ -669,28 +682,33 @@ so that I can understand my academic standing through letter grades, grade point
 
 #### Development Tasks & Assignments (SCRUM-106)
 
-- Backend: Evaluation & rule modeling engine  
-  - Assignee: Kartik  
+- Backend: Evaluation & rule modeling engine
+
+  - Assignee: Kartik
   - Status: DONE (SCRUM-112)
 
-- Frontend: Evaluation results UI  
-  - Assignee: Shadi  
+- Frontend: Evaluation results UI
+
+  - Assignee: Shadi
   - Status: DONE (SCRUM-115)
 
-- Frontend: UI/UX design support  
-  - Assignee: Shadi  
+- Frontend: UI/UX design support
+
+  - Assignee: Shadi
   - Status: DONE (SCRUM-130)
 
-- Database: Support evaluation data/model compatibility  
-  - Assignee: Himanshi  
+- Database: Support evaluation data/model compatibility
+
+  - Assignee: Himanshi
   - Status: DONE (SCRUM-116)
 
-- Testing: Unit & integration tests for evaluation logic  
-  - Assignee: Bardiya  
+- Testing: Unit & integration tests for evaluation logic
+
+  - Assignee: Bardiya
   - Status: DONE (SCRUM-117)
 
-- Docs: Update log.md & technical notes  
-  - Assignee: Bardiya  
+- Docs: Update log.md & technical notes
+  - Assignee: Bardiya
   - Status: TO DO (SCRUM-118)
 
 #### Key Design Decisions / Notes
@@ -706,6 +724,7 @@ so that I can understand my academic standing through letter grades, grade point
 #### Testing Summary (SCRUM-117)
 
 Automated tests verify:
+
 - YorkU boundary mappings and rounding thresholds.
 - Required remaining average math for partially graded courses.
 - Difficulty classification threshold correctness.
@@ -719,11 +738,76 @@ Automated tests verify:
 - Advanced strategy engine beyond rule-based difficulty labels.
 - Additional UI visualization for showing calculation steps (if prioritized).
 
+### ITR2-5 — Interactive Strategy Dashboard (Grade Boundaries + Calculation Transparency + Learning Optimization)
+
+SCRUM-91
+
+**Story Owner:** Rima Ramcharan
+**Planned Effort:** 5–6 days
+**Actual Effort:** 6 days
+
+#### Story Description
+
+As a student, I want an interactive dashboard that models my best and worst-case grade scenarios and suggests specific study techniques, so that I can strategically prioritize my efforts and trust the accuracy of the system’s projections through transparent calculations.
+
+#### Scope (ITR2)
+
+- Interactive Planning Dashboard:
+  - Central hub visualizing current progress, weighted contributions, and projected final grades.
+  - Integration of "What-If" sliders to adjust performance assumptions dynamically.
+- Grade Boundary Modeling:
+  - Calculation and display of "Worst-Case" (minimum needed to pass/hit target) and "Best-Case" (max possible grade) scenarios.
+- Calculation Transparency:
+  - "Show Calculations" toggle to reveal weighted average formulas and underlying math.
+  - Transparent breakdown of how each assessment contributes to the final standing.
+- Smart Learning Strategies:
+  - Integration of a recommendation engine suggesting specific techniques (80/20 Rule, Active Recall, Feynman Technique) based on assessment weight and remaining time.
+- Dynamic Updating:
+  - Projections and boundaries update immediately as the user explores "what-if" scores without overwriting actual saved grades.
+  - System handles incomplete syllabi where total weight may not yet sum to 100%.
+
+#### Development Tasks & Assignments
+
+Backend: Implement grade boundaries and projection logic
+Assignee: Kartik Sharma (SCRUM-90)
+Status: TO DO
+
+Frontend: Build Interactive Strategy Dashboard & Boundary Visualization
+Assignee: Rima Ram... (SCRUM-91)
+Status: DONE
+
+Frontend: UI/UX Design in Figma
+Assignee: Shadi Kari... (SCRUM-131)
+Status: DONE
+
+Database: Update schema for learning strategies & projections
+Assignee: himanshi v... (SCRUM-92)
+Status: IN PROGRESS
+
+Tests: Add unit tests for weighted average & boundary math
+Assignee: Bardiya A... (SCRUM-93)
+Status: DONE
+
+Docs: Document grade projection logic & learning strategies
+Assignee: Rima Ram... (SCRUM-94)
+Status: IN PROGRESS
+
+#### Notes / Reflection
+
+- Completed the core frontend dashboard architecture, including the performance assumption slider and the multi-course selector interface.
+- Implemented "What-If" state management to allow real-time grade exploration without data loss or accidental overwrites of actual grades.
+- Integrated the learning strategy recommendation UI to help students prioritize high-weight assessments (80/20 rule).
+- Verified calculation transparency logic with unit tests to ensure mathematical accuracy in the weighted average displays.
+- Current focus is finalizing the documentation for the persistence architecture and helping the backend team sync the projection logic with the updated database schema.
+
 ## 4. Major Design Decisions (ITR2)
+
 (To be updated)
 
 ## 5. Concerns / Issues (ITR2)
+
 (To be updated)
 
 ## 6. Iteration Summary (ITR2)
+
 (To be updated)
