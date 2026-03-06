@@ -4,14 +4,21 @@ import warnings
 from fastapi import Depends, HTTPException, Request, status
 
 from app.config import AUTH_COOKIE_NAME
-from app.repositories.base import CourseRepository, DeadlineRepository, UserRepository
+from app.repositories.base import (
+    CourseRepository,
+    DeadlineRepository,
+    ScenarioRepository,
+    UserRepository,
+)
 from app.repositories.inmemory_course_repo import InMemoryCourseRepository
 from app.repositories.inmemory_deadline_repo import InMemoryDeadlineRepository
+from app.repositories.inmemory_scenario_repo import InMemoryScenarioRepository
 from app.repositories.inmemory_user_repo import InMemoryUserRepository
 from app.services.auth_service import AuthService, AuthenticatedUser, AuthenticationError
 from app.services.course_service import CourseService
 from app.services.deadline_service import DeadlineService
 from app.services.extraction_service import ExtractionService
+from app.services.scenario_service import ScenarioService
 
 
 def _is_truthy_env(value: str | None) -> bool:
@@ -81,13 +88,33 @@ def _build_user_repo() -> UserRepository:
     return InMemoryUserRepository()
 
 
+def _build_scenario_repo() -> ScenarioRepository:
+    if _is_truthy_env(os.getenv("USE_POSTGRES")):
+        try:
+            from app.repositories.postgres_scenario_repo import PostgresScenarioRepository
+
+            return PostgresScenarioRepository()
+        except Exception as exc:
+            if not _allow_postgres_fallback():
+                raise
+            warnings.warn(
+                "USE_POSTGRES=true but Postgres scenario repository initialization failed. "
+                f"Falling back to InMemoryScenarioRepository. Reason: {exc}",
+                RuntimeWarning,
+            )
+            return InMemoryScenarioRepository()
+    return InMemoryScenarioRepository()
+
+
 _course_repo = _build_course_repo()
 _user_repo = _build_user_repo()
 _deadline_repo = _build_deadline_repo()
+_scenario_repo = _build_scenario_repo()
 _course_service = CourseService(_course_repo)
 _auth_service = AuthService(_user_repo)
 _extraction_service = ExtractionService()
 _deadline_service = DeadlineService(_deadline_repo)
+_scenario_service = ScenarioService(_scenario_repo, _course_service)
 
 
 def get_course_repo() -> CourseRepository:
@@ -116,6 +143,14 @@ def get_deadline_service() -> DeadlineService:
 
 def get_deadline_repo() -> DeadlineRepository:
     return _deadline_repo
+
+
+def get_scenario_repo() -> ScenarioRepository:
+    return _scenario_repo
+
+
+def get_scenario_service() -> ScenarioService:
+    return _scenario_service
 
 
 def get_current_user(

@@ -156,7 +156,7 @@ export function UploadStep() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.doc,.docx,.txt"
+          accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
           className="hidden"
           onChange={handleFileSelected}
           disabled={loading}
@@ -208,7 +208,7 @@ export function UploadStep() {
         ) : null}
 
         <p className="mt-4 text-xs text-gray-300">
-          Supports PDF, Word, or text files
+          Supports PDF, Word, text, and image files (PNG/JPG)
         </p>
 
         <div className="my-10 h-[1px] bg-gray-100 w-full" />

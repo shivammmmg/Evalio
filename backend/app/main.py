@@ -12,6 +12,7 @@ from app.routes.extraction import router as extraction_router
 from app.routes.gpa import router as gpa_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.deadlines import router as deadlines_router
+from app.routes.scenarios import router as scenarios_router
 
 app = FastAPI(title="Evalio API", version="0.1.0")
 
@@ -35,6 +36,7 @@ app.include_router(extraction_router)
 app.include_router(gpa_router)
 app.include_router(dashboard_router)
 app.include_router(deadlines_router)
+app.include_router(scenarios_router)
 
 @app.get("/health")
 def health():

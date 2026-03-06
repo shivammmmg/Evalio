@@ -11,8 +11,10 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
@@ -63,6 +65,9 @@ class CourseDB(Base):
     assessments: Mapped[list["AssessmentDB"]] = relationship(
         back_populates="course", cascade="all, delete-orphan"
     )
+    scenarios: Mapped[list["ScenarioDB"]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
 
 
 class AssessmentDB(Base):
@@ -98,6 +103,9 @@ class AssessmentDB(Base):
     rule: Mapped["RuleDB | None"] = relationship(
         back_populates="assessment", uselist=False, cascade="all, delete-orphan"
     )
+    scenario_scores: Mapped[list["ScenarioScoreDB"]] = relationship(
+        back_populates="assessment", cascade="all, delete-orphan"
+    )
 
 
 class RuleDB(Base):
@@ -116,6 +124,43 @@ class RuleDB(Base):
     )
 
     assessment: Mapped[AssessmentDB] = relationship(back_populates="rule")
+
+
+class ScenarioDB(Base):
+    __tablename__ = "scenarios"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    course_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    course: Mapped[CourseDB] = relationship(back_populates="scenarios")
+    scores: Mapped[list["ScenarioScoreDB"]] = relationship(
+        back_populates="scenario", cascade="all, delete-orphan"
+    )
+
+
+class ScenarioScoreDB(Base):
+    __tablename__ = "scenario_scores"
+    __table_args__ = (UniqueConstraint("scenario_id", "assessment_id", name="uq_scenario_scores_pair"),)
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    scenario_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("scenarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    assessment_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    simulated_score: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+
+    scenario: Mapped[ScenarioDB] = relationship(back_populates="scores")
+    assessment: Mapped[AssessmentDB] = relationship(back_populates="scenario_scores")
 
 
 class DeadlineDB(Base):
@@ -142,3 +187,38 @@ class DeadlineDB(Base):
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    _ensure_rules_rule_type_constraint()
+
+
+def _ensure_rules_rule_type_constraint() -> None:
+    # Keep DB constraint aligned with extraction/backend rule types.
+    if engine.dialect.name != "postgresql":
+        return
+
+    ddl = """
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_name = 'rules'
+    ) THEN
+        ALTER TABLE rules
+        DROP CONSTRAINT IF EXISTS rules_rule_type_check;
+
+        ALTER TABLE rules
+        ADD CONSTRAINT rules_rule_type_check
+        CHECK (
+            rule_type IN (
+                'pure_multiplicative',
+                'best_of',
+                'drop_lowest',
+                'mandatory_pass'
+            )
+        );
+    END IF;
+END
+$$;
+"""
+    with engine.begin() as connection:
+        connection.execute(text(ddl))

@@ -35,7 +35,7 @@ Evalio is a course-planning web app for tracking weighted assessments, calculati
 Storage behavior today:
 
 - Default is in-memory repositories.
-- Optional PostgreSQL repositories can be enabled via `USE_POSTGRES=true` (courses, users, deadlines).
+- Optional PostgreSQL repositories can be enabled via `USE_POSTGRES=true` (courses, users, deadlines, scenarios).
 
 ## Repository Layout
 
@@ -53,7 +53,7 @@ project-group-11-evalio/
 │   │   ├── services/
 │   │   │   ├── extraction/       # orchestrator + modular extraction helpers
 │   │   │   └── extraction_service.py  # compatibility wrapper
-│   │   ├── repositories/         # in-memory + postgres course repo
+│   │   ├── repositories/         # in-memory + postgres repos (users/courses/deadlines/scenarios)
 │   │   ├── models*.py
 │   │   └── db.py
 │   ├── test/
@@ -109,6 +109,48 @@ uvicorn app.main:app --reload --port 8000
 
 Backend docs: `http://127.0.0.1:8000/docs`
 
+### 3b. Run backend with PostgreSQL (team/dev)
+
+If you want persistence across restarts, run backend in Postgres mode.
+
+1. Start Postgres (macOS/Homebrew):
+
+```bash
+brew services start postgresql@16
+```
+
+2. Ensure CLI tools are available (one-time):
+
+```bash
+echo 'export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+hash -r
+```
+
+3. Verify DB service:
+
+```bash
+psql --version
+pg_isready -h localhost -p 5432
+```
+
+4. Create database once:
+
+```bash
+createdb evalio
+```
+
+5. Run backend with Postgres (disable fallback for fail-fast):
+
+```bash
+cd backend
+source .venv/bin/activate
+export USE_POSTGRES=true
+export DATABASE_URL='postgresql+psycopg://localhost:5432/evalio'
+export POSTGRES_FALLBACK_TO_MEMORY=false
+uvicorn app.main:app --reload --port 8000
+```
+
 ### 4. Run frontend
 
 ```bash
@@ -139,7 +181,7 @@ OPENAI_TIMEOUT_SECONDS=20
 
 ```bash
 USE_POSTGRES=true
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/evalio
+DATABASE_URL=postgresql+psycopg://localhost:5432/evalio
 POSTGRES_FALLBACK_TO_MEMORY=true
 FILTER_DEBUG=1
 GOOGLE_CLIENT_ID=...
@@ -179,6 +221,12 @@ Base URL: `http://127.0.0.1:8000`
   - `GET /courses/{course_id}/dashboard`
   - `POST /courses/{course_id}/dashboard/whatif`
   - `GET /courses/{course_id}/dashboard/strategies`
+- Scenarios:
+  - `POST /courses/{course_id}/scenarios`
+  - `GET /courses/{course_id}/scenarios`
+  - `GET /courses/{course_id}/scenarios/{scenario_id}`
+  - `GET /courses/{course_id}/scenarios/{scenario_id}/run`
+  - `DELETE /courses/{course_id}/scenarios/{scenario_id}`
 - GPA:
   - `GET /gpa/scales`
   - `GET /courses/{course_id}/gpa`
@@ -228,9 +276,9 @@ npm run lint
 ## Known Limitations
 
 - Default runtime storage is still mostly in-memory.
-- PostgreSQL integration supports course, user, and deadline repositories when enabled.
+- PostgreSQL integration supports course, user, deadline, and scenario repositories when enabled.
 - Extraction quality depends on outline formatting and OCR quality.
-- Frontend upload picker currently lists `.pdf/.doc/.docx/.txt`; backend extraction endpoint also supports image uploads.
+- Frontend upload picker supports `.pdf/.doc/.docx/.txt/.png/.jpg/.jpeg`.
 - `/setup/plan` and `/explore` are placeholder routes.
 
 ## Iteration Artifacts

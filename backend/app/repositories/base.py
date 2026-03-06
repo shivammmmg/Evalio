@@ -19,6 +19,20 @@ class StoredUser:
     password_hash: str
 
 
+@dataclass(frozen=True)
+class StoredScenarioEntry:
+    assessment_name: str
+    score: float
+
+
+@dataclass(frozen=True)
+class StoredScenario:
+    scenario_id: UUID
+    name: str
+    entries: list[StoredScenarioEntry]
+    created_at: str
+
+
 class CourseRepository(Protocol):
     def create(self, user_id: UUID, course: CourseCreate) -> StoredCourse:
         ...
@@ -85,6 +99,29 @@ class DeadlineRepository(Protocol):
         deadline_id: UUID,
         gcal_event_id: str,
     ) -> Deadline | None:
+        ...
+
+    def clear(self) -> None:
+        ...
+
+
+class ScenarioRepository(Protocol):
+    def create(
+        self,
+        user_id: UUID,
+        course_id: UUID,
+        name: str,
+        entries: list[StoredScenarioEntry],
+    ) -> StoredScenario:
+        ...
+
+    def list_all(self, user_id: UUID, course_id: UUID) -> list[StoredScenario]:
+        ...
+
+    def get_by_id(self, user_id: UUID, course_id: UUID, scenario_id: UUID) -> StoredScenario | None:
+        ...
+
+    def delete(self, user_id: UUID, course_id: UUID, scenario_id: UUID) -> bool:
         ...
 
     def clear(self) -> None:

@@ -4,11 +4,16 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lightbulb, RotateCcw } from "lucide-react";
 import {
+  deleteSavedScenario,
   listCourses,
+  listSavedScenarios,
   runWhatIf,
+  runSavedScenario,
+  saveScenario,
   updateCourseGrades,
   type Course,
   type CourseAssessment,
+  type SavedScenario,
 } from "@/lib/api";
 import { useSetupCourse } from "@/app/setup/course-context";
 import { getApiErrorMessage } from "@/lib/errors";
@@ -38,12 +43,29 @@ export function ExploreScenarios() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [scenarioName, setScenarioName] = useState("");
+  const [savingScenario, setSavingScenario] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deletingScenario, setDeletingScenario] = useState(false);
+  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>([]);
+  const [selectedScenarioId, setSelectedScenarioId] = useState("");
+  const [loadingScenario, setLoadingScenario] = useState(false);
   const { courseId, ensureCourseIdFromList } = useSetupCourse();
 
   const [activeScenario, setActiveScenario] = useState<Record<string, number>>({});
   const [activeAssessmentName, setActiveAssessmentName] = useState<string | null>(
     null
   );
+
+  const fetchSavedScenarios = async (resolvedCourseId: string) => {
+    try {
+      const saved = await listSavedScenarios(resolvedCourseId);
+      setSavedScenarios(saved.scenarios ?? []);
+    } catch {
+      setSavedScenarios([]);
+    }
+  };
 
   useEffect(() => {
     const loadCourse = async () => {
@@ -69,6 +91,7 @@ export function ExploreScenarios() {
         }));
 
         setAssessments(normalized);
+        await fetchSavedScenarios(resolvedCourseId);
         setError("");
       } catch (e) {
         setError(getApiErrorMessage(e, "Failed to load course."));
@@ -142,6 +165,60 @@ export function ExploreScenarios() {
     setActiveAssessmentName(null);
   };
 
+  const handleOpenSaveDialog = () => {
+    setScenarioName("");
+    setShowSaveDialog(true);
+  };
+
+  const handleSaveScenario = async () => {
+    if (!courseId) {
+      setError("No course found. Complete setup first.");
+      return;
+    }
+
+    const trimmedName = scenarioName.trim();
+    if (!trimmedName) {
+      setError("Scenario name is required.");
+      return;
+    }
+
+    const scenarios = assessments
+      .filter((assessment) => typeof activeScenario[assessment.name] === "number")
+      .map((assessment) => {
+        const score = clampPercent(activeScenario[assessment.name]);
+        const actual = getActualGrade(assessment);
+        return { assessment_name: assessment.name, score, actual };
+      })
+      .filter(
+        ({ score, actual }) =>
+          typeof actual !== "number" || Math.abs(score - actual) > 0.001
+      )
+      .map(({ assessment_name, score }) => ({ assessment_name, score }));
+
+    if (!scenarios.length) {
+      setError("No changed what-if values to save.");
+      return;
+    }
+
+    try {
+      setSavingScenario(true);
+      const saved = await saveScenario(courseId, {
+        name: trimmedName,
+        scenarios,
+      });
+      await fetchSavedScenarios(courseId);
+      setSelectedScenarioId(saved.scenario.scenario_id);
+      setShowSaveDialog(false);
+      setScenarioName("");
+      setError("");
+      window.alert("Scenario saved successfully.");
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Failed to save scenario."));
+    } finally {
+      setSavingScenario(false);
+    }
+  };
+
   const handleApplyToGrades = async () => {
     if (!courseId) {
       setError("No course found. Complete setup first.");
@@ -193,6 +270,64 @@ export function ExploreScenarios() {
     }
   };
 
+  const handleDeleteScenarioClick = () => {
+    if (!selectedScenarioId) {
+      window.alert("Please select a scenario to delete.");
+      return;
+    }
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteScenario = async () => {
+    if (!courseId || !selectedScenarioId) {
+      setShowDeleteDialog(false);
+      return;
+    }
+
+    try {
+      setDeletingScenario(true);
+      await deleteSavedScenario(courseId, selectedScenarioId);
+      await fetchSavedScenarios(courseId);
+      setSelectedScenarioId("");
+      setActiveScenario({});
+      setActiveAssessmentName(null);
+      setShowDeleteDialog(false);
+      setError("");
+      window.alert("Scenario deleted successfully.");
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Failed to delete scenario."));
+    } finally {
+      setDeletingScenario(false);
+    }
+  };
+
+  const handleSelectScenario = async (scenarioId: string) => {
+    setSelectedScenarioId(scenarioId);
+    if (!scenarioId) {
+      return;
+    }
+    if (!courseId) {
+      setError("No course found. Complete setup first.");
+      return;
+    }
+
+    try {
+      setLoadingScenario(true);
+      const response = await runSavedScenario(courseId, scenarioId);
+      const overrides: Record<string, number> = {};
+      for (const entry of response.scenario.entries) {
+        overrides[entry.assessment_name] = clampPercent(entry.score);
+      }
+      setActiveScenario(overrides);
+      setActiveAssessmentName(null);
+      setError("");
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Failed to load scenario."));
+    } finally {
+      setLoadingScenario(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 pb-20">
       <h2 className="text-3xl font-bold text-gray-800">Scenario Explorer</h2>
@@ -208,11 +343,26 @@ export function ExploreScenarios() {
         {/* LEFT: WHAT-IF */}
         <div className="lg:col-span-2">
           <div className="bg-white border border-gray-200 rounded-3xl p-8 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <Lightbulb className="text-[#C8833F]" size={22} />
-              <h3 className="text-lg font-semibold text-gray-800">
-                What-If Exploration
-              </h3>
+            <div className="flex justify-between items-center mb-6 gap-4">
+              <div className="flex items-center gap-3">
+                <Lightbulb className="text-[#C8833F]" size={22} />
+                <h3 className="text-lg font-semibold text-gray-800">
+                  What-If Exploration
+                </h3>
+              </div>
+              <select
+                value={selectedScenarioId}
+                onChange={(e) => handleSelectScenario(e.target.value)}
+                disabled={loadingScenario}
+                className="min-w-[180px] rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 focus:border-[#5D737E] focus:outline-none disabled:opacity-70"
+              >
+                <option value="">Select Scenario</option>
+                {savedScenarios.map((scenario) => (
+                  <option key={scenario.scenario_id} value={scenario.scenario_id}>
+                    {scenario.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-5">
@@ -295,13 +445,29 @@ export function ExploreScenarios() {
             {/* Controls appear only when changed */}
             {hasChanges ? (
               <div className="mt-8 pt-6 border-t border-gray-100">
-                <button
-                  onClick={handleResetAll}
-                  className="inline-flex items-center gap-2 bg-[#E6E2DB] text-gray-800 px-5 py-3 rounded-xl font-medium hover:opacity-90 transition shadow-sm"
-                >
-                  <RotateCcw size={16} />
-                  Reset All
-                </button>
+                <div className="inline-flex items-center gap-3">
+                  <button
+                    onClick={handleOpenSaveDialog}
+                    disabled={savingScenario}
+                    className="inline-flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl font-medium hover:opacity-90 transition shadow-sm disabled:opacity-70"
+                  >
+                    Save Scenario
+                  </button>
+                  <button
+                    onClick={handleDeleteScenarioClick}
+                    disabled={deletingScenario}
+                    className="inline-flex items-center gap-2 bg-red-600 text-white px-5 py-3 rounded-xl font-medium hover:opacity-90 transition shadow-sm disabled:opacity-70"
+                  >
+                    Delete Scenario
+                  </button>
+                  <button
+                    onClick={handleResetAll}
+                    className="inline-flex items-center gap-2 bg-[#E6E2DB] text-gray-800 px-5 py-3 rounded-xl font-medium hover:opacity-90 transition shadow-sm"
+                  >
+                    <RotateCcw size={16} />
+                    Reset All
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>
@@ -357,6 +523,78 @@ export function ExploreScenarios() {
           </div>
         </div>
       </div>
+
+      {showSaveDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h4 className="text-lg font-semibold text-gray-800">Save Scenario</h4>
+            <p className="mt-2 text-sm text-gray-600">
+              Enter a name for this scenario
+            </p>
+
+            <input
+              type="text"
+              value={scenarioName}
+              onChange={(e) => setScenarioName(e.target.value)}
+              className="mt-4 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:border-[#5D737E] focus:outline-none"
+              placeholder="Scenario name"
+              autoFocus
+            />
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  if (savingScenario) return;
+                  setShowSaveDialog(false);
+                  setScenarioName("");
+                }}
+                className="rounded-xl bg-[#E6E2DB] px-4 py-2 text-sm font-medium text-gray-800 hover:opacity-90 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveScenario}
+                disabled={savingScenario}
+                className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-70"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showDeleteDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h4 className="text-lg font-semibold text-gray-800">
+              Delete this scenario?
+            </h4>
+            <p className="mt-2 text-sm text-gray-600">
+              This action cannot be undone.
+            </p>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  if (deletingScenario) return;
+                  setShowDeleteDialog(false);
+                }}
+                className="rounded-xl bg-[#E6E2DB] px-4 py-2 text-sm font-medium text-gray-800 hover:opacity-90 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteScenario}
+                disabled={deletingScenario}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-70"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -88,6 +88,49 @@ export type MinimumRequiredResponse = {
   explanation: string;
 };
 
+export type SaveScenarioPayload = {
+  name: string;
+  scenarios: Array<{
+    assessment_name: string;
+    score: number;
+  }>;
+};
+
+export type SaveScenarioResponse = {
+  message: string;
+  scenario: {
+    scenario_id: string;
+    name: string;
+    created_at: string;
+    entries: Array<{
+      assessment_name: string;
+      score: number;
+    }>;
+    entry_count: number;
+  };
+};
+
+export type SavedScenario = {
+  scenario_id: string;
+  name: string;
+  created_at: string;
+  entries: Array<{
+    assessment_name: string;
+    score: number;
+  }>;
+  entry_count: number;
+};
+
+export type ListScenariosResponse = {
+  scenarios: SavedScenario[];
+  count: number;
+};
+
+export type RunSavedScenarioResponse = {
+  scenario: SavedScenario;
+  result: unknown;
+};
+
 export type ApiError = Error & {
   response?: {
     data?: unknown;
@@ -244,6 +287,29 @@ export function runWhatIf(
     method: "POST",
     body: JSON.stringify(payload),
   }) as Promise<WhatIfResponse>;
+}
+
+export function saveScenario(courseId: string, payload: SaveScenarioPayload) {
+  return request(`/courses/${courseId}/scenarios`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }) as Promise<SaveScenarioResponse>;
+}
+
+export function listSavedScenarios(courseId: string) {
+  return request(`/courses/${courseId}/scenarios`) as Promise<ListScenariosResponse>;
+}
+
+export function runSavedScenario(courseId: string, scenarioId: string) {
+  return request(
+    `/courses/${courseId}/scenarios/${scenarioId}/run`
+  ) as Promise<RunSavedScenarioResponse>;
+}
+
+export function deleteSavedScenario(courseId: string, scenarioId: string) {
+  return request(`/courses/${courseId}/scenarios/${scenarioId}`, {
+    method: "DELETE",
+  }) as Promise<{ message: string }>;
 }
 
 export function getMinimumRequired(

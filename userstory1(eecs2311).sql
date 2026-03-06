@@ -220,6 +220,7 @@ CREATE TABLE rules (
     UNIQUE (assessment_id),
 
     CHECK (rule_type IN (
+        'pure_multiplicative',
         'best_of',
         'drop_lowest',
         'mandatory_pass'
@@ -317,6 +318,5 @@ ON assessments(category_id);
 
 CREATE INDEX idx_deadlines_course_due_at
 ON deadlines(course_id, due_at);
-
 
 
