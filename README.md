@@ -46,7 +46,6 @@ project-group-11-evalio/
 ├── README.md
 ├── database/
 │   ├── README.md
-│   ├── erdiagramEECS2311.png
 │   └── schema/
 │       └── evalio_schema.sql
 ├── submission/
@@ -85,7 +84,7 @@ project-group-11-evalio/
 - Runtime database code stays in `backend/` (`app/db.py`, repositories, models, DI).
 - Submission-facing artifacts live in `database/`:
   - `database/schema/evalio_schema.sql`
-  - `database/erdiagramEECS2311.png`
+  - `docs/ER diagram/erdiagram_evalio.png`
   - `database/README.md`
 
 ## Quick Start

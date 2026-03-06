@@ -5,7 +5,7 @@ This folder is intentionally separate for EECS 2311 ITR2 submission review.
 ## Contents
 
 - `schema/evalio_schema.sql`: SQL schema artifact used for submission.
-- `erdiagramEECS2311.png`: ER diagram copy for quick TA review.
+- ER diagram: `docs/ER diagram/erdiagram_evalio.png`.
 
 ## Important Scope Note
 
