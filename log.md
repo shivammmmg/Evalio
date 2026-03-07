@@ -1111,7 +1111,6 @@ As a student, I want my assignment and test deadlines to be automatically extrac
 1. Backend: Deadline management, OCR parsing, and calendar integration
 
    * Assignee: Kartik ([SCRUM-83](https://rimaaa.atlassian.net/browse/SCRUM-83))
-   * Status: DONE
 
 2. Frontend: Deadline management UI, review flow, and countdown display
 
@@ -1133,13 +1132,6 @@ As a student, I want my assignment and test deadlines to be automatically extrac
 
    * Assignee: Shadi ([SCRUM-87](https://rimaaa.atlassian.net/browse/SCRUM-87))
 
-##### SCRUM-83 Implementation Summary (Backend — Kartik)
-
-- `models_deadline.py` (77 lines): Pydantic schemas — `Deadline`, `DeadlineCreate`, `DeadlineUpdate`, `DeadlineExportRequest`, `DeadlineExportResponse`, `GoogleAuthUrlResponse`.
-- `services/deadline_service.py` (573 lines): Deadline CRUD orchestration, OCR-based deadline extraction with lightweight date parser (regex for month-name, numeric, and time patterns), ICS calendar generation (RFC-5545 compliant, zero external dependencies), Google Calendar integration via stdlib `urllib` (OAuth2 flow, event creation with 1-week reminders, duplicate prevention via `gcal_event_id`). Graceful 501 fallback when Google credentials are not configured.
-- `routes/deadlines.py` (333 lines): 10 FastAPI endpoints — extract from outline, CRUD (list/create/update/delete), ICS download, Google Calendar export, Google OAuth2 authorize + callback.
-- `test_deadline_endpoints.py` (303 lines): Integration tests covering CRUD, extraction, export, and error handling.
-- Total: ~1,286 lines of backend code + tests.
 
 #### Notes / Reflection
 
