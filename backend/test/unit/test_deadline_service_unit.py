@@ -23,6 +23,10 @@ def test_parse_date_slash_format():
     assert _parse_date_str("03/15/26") == "2026-03-15"
 
 
+def test_parse_date_hyphen_format_defaults_day_first():
+    assert _parse_date_str("10-02-2025") == "2025-02-10"
+
+
 def test_parse_time_12h_and_24h():
     assert _parse_time_str("11:59 pm") == "23:59"
     assert _parse_time_str("12am") == "00:00"
@@ -39,6 +43,25 @@ def test_extract_deadlines_deduplicates():
     results = extract_deadlines_from_text(text, course_name="EECS2311")
     assert len(results) == 2
     assert results[0]["due_date"] in {"2026-03-15", "2026-04-10"}
+
+
+def test_extract_deadlines_skips_non_assessment_date_lines():
+    text = "\n".join([
+        "Course starts from January 13, 2026",
+        "Reading week from February 17, 2026",
+        "Assignment 2 due March 01, 2026",
+    ])
+    results = extract_deadlines_from_text(text, course_name="EECS2311")
+    assert len(results) == 1
+    assert results[0]["title"].lower().startswith("assignment 2")
+
+
+def test_extract_deadlines_table_style_row_title_cleanup():
+    text = "Lab Test 1 15 10-02-2025, 11-02-2025"
+    results = extract_deadlines_from_text(text, course_name="EECS2311")
+    assert len(results) == 1
+    assert results[0]["title"] == "Lab Test 1"
+    assert results[0]["due_date"] == "2025-02-10"
 
 
 def test_generate_ics_contains_alarm_and_summary():
